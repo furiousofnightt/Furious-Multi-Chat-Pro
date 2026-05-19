@@ -1,90 +1,76 @@
-# Furious Multi Chat Pro
+<div align="center">
+  <h1>🌟 Furious Multi Chat Pro</h1>
+  <p><strong>A plataforma definitiva para streamers gerenciarem chats de múltiplas redes simultaneamente.</strong></p>
+  <p>
+    <img src="https://img.shields.io/badge/Twitch-9146FF?style=for-the-badge&logo=twitch&logoColor=white" alt="Twitch" />
+    <img src="https://img.shields.io/badge/TikTok-000000?style=for-the-badge&logo=tiktok&logoColor=white" alt="TikTok" />
+    <img src="https://img.shields.io/badge/Kick-53FC18?style=for-the-badge&logo=kick&logoColor=black" alt="Kick" />
+  </p>
 
-Aplicação desktop multi-plataforma para streamers capturarem e exibirem chat de múltiplas plataformas simultaneamente (Twitch, TikTok, Kick).
+  <br />
 
-## 🚀 Funcionalidades
+  <a href="https://furiousmultichat.pythonanywhere.com/">
+    <img src="https://img.shields.io/badge/⬇️_BAIXAR_AGORA-0078D7?style=for-the-badge&logo=windows&logoColor=white" alt="Baixar Furious Multi Chat Pro" />
+  </a>
+  <br />
+  <sub>Disponível para Windows 10/11</sub>
+</div>
 
-- **Chat Multi-Plataforma**: Capture mensagens do Twitch, TikTok e Kick simultaneamente
-- **Interface Moderna**: Design com glassmorphism, animações suaves e personalização completa
-- **Hotkeys Globais**: Atalhos de teclado para mostrar/esconder e limpar o chat
-- **Overlay para Streaming**: Janela sempre no topo com opacidade ajustável
-- **Suporte a Emotes**: Exibe emotes da Twitch (nativos), 7TV, BTTV e Kick
-- **Notificações de Entrada**: Banners animados quando usuários entram na live
-- **Filtro de Palavras**: Blacklist para censurar palavras indesejadas
-- **Suporte Multilíngue**: Português (Brasil) e Inglês
-- **Atraso de Mensagens**: Opção para "lentidão" nas mensagens (útil para leitura)
+---
 
-## 📋 Requisitos
+## 🎯 Sobre o Projeto
 
-- Python 3.12+
-- Windows 10/11 (com suporte a transparência e blur)
-- Dependências listadas em `requirements.txt`
+O **Furious Multi Chat Pro** é uma aplicação desktop de alta performance criada especificamente para streamers que transmitem em múltiplas plataformas. Ele unifica os chats da **Twitch, TikTok e Kick** em uma única interface elegante, transparente e customizável, ideal para sobrepor em jogos ou utilizar no OBS Studio.
 
-## 🛠️ Instalação
+## ✨ Principais Funcionalidades
 
-```bash
-pip install -r requirements.txt
-```
+- **🌐 Chat Multi-Plataforma**: Capture e visualize mensagens do Twitch, TikTok e Kick em tempo real e em uma única janela.
+- **🎨 Design Premium & Glassmorphism**: Interface moderna, fluida e com suporte a transparência e efeito blur (desfoque nativo do Windows).
+- **👻 Overlay Inteligente**: Modo "Sempre no Topo" (Always-on-top) com opacidade ajustável e função "Click-through" (clique através do chat) para não atrapalhar sua gameplay.
+- **⌨️ Hotkeys Globais**: Atalhos de teclado customizáveis para ocultar/exibir ou limpar o chat rapidamente.
+- **😎 Suporte Completo a Emotes**: Renderização em tempo real de emotes nativos da Twitch, Kick, além de suportar extensões populares como **7TV e BTTV**.
+- **🔔 Notificações Visuais**: Alertas em formato de banner animado quando novos espectadores entram na live.
+- **🛡️ Ferramentas de Moderação**: Sistema de *Blacklist* para censurar automaticamente palavras indesejadas.
+- **⏳ Controle de Leitura**: Sistema de atraso e espaçamento de mensagens para facilitar a leitura em chats muito movimentados.
+- **🌍 Internacionalização**: Suporte nativo para Português (Brasil) e Inglês.
 
-## ▶️ Execução
+---
 
-```bash
-python run.py
-```
+## 📋 Requisitos do Sistema
 
-## 📁 Estrutura do Projeto
+- **Sistema Operacional**: Windows 10 ou Windows 11 (necessário para os efeitos de transparência e blur)
+- **Python**: Versão 3.12 ou superior (para execução via código-fonte)
 
-```
-chat-geral-ttk-twitch-kick/
-├── run.py                  # Entry point da aplicação
-├── main.py                 # Inicialização do QApplication e sistema principal
-├── requirements.txt        # Dependências Python
-├── settings.json          # Configurações do usuário (gerado automaticamente)
-│
-├── core/                   # Núcleo da aplicação
-│   ├── chat_manager.py    # Gerenciamento de handlers e fila de mensagens
-│   ├── settings_manager.py # Persistência de configurações
-│   ├── hotkey_manager.py  # Sistema de hotkeys globais
-│   └── __init__.py
-│
-├── chat_handlers/          # Handlers de chat por plataforma
-│   ├── base_handler.py    # Classe abstrata base
-│   ├── twitch_handler.py # Integração IRC com Twitch
-│   ├── tiktok_handler.py # Integração via TikTokLive
-│   ├── kick_handler.py   # Integração via KickAPI
-│   └── __init__.py
-│
-├── ui/                     # Interface do usuário (PyQt6)
-│   ├── main_window.py     # Janela principal do chat
-│   ├── config_window.py  # Janela de configurações
-│   └── __init__.py
-│
-├── utils/                  # Utilitários
-│   ├── translations.py    # Sistema de internacionalização
-│   ├── emoticons.py     # Processamento e cache de emotes
-│   ├── resource_path.py  # Resolução de caminhos (dev vs build)
-│   └── blur_window.py    # Efeito de blur para Windows
-│
-└── assets/                 # Recursos estáticos
-    ├── fonts/            # Fontes customizadas
-    ├── *.svg             # Ícones e badges
-    └── *.png             # Ícones de plataformas
-```
+## 🛠️ Instalação (Desenvolvedores)
+
+Se você deseja rodar a aplicação a partir do código-fonte:
+
+1. Clone o repositório ou baixe o código.
+2. Instale as dependências necessárias:
+   ```bash
+   pip install -r requirements.txt
+   ```
+3. Execute o arquivo principal:
+   ```bash
+   python run.py
+   ```
+
+---
 
 ## 🔧 Configuração
 
-Ao executar pela primeira vez, o arquivo `settings.json` é criado automaticamente com valores padrão:
+Na primeira execução, o sistema gerará automaticamente o arquivo `settings.json` contendo suas preferências. Você pode editá-lo diretamente ou através da aba de configurações dentro da própria interface:
 
 ```json
 {
-    "twitch": "",
-    "tiktok": "",
-    "kick": "",
+    "twitch": "seu_canal_twitch",
+    "tiktok": "seu_canal_tiktok",
+    "kick": "seu_canal_kick",
     "language": "pt-br",
     "opacity": 0.85,
     "theme": "dark",
     "click_through": false,
-    "blacklist": [],
+    "blacklist": ["palavrão1", "palavrão2"],
     "font_family": "Segoe UI Variable Display",
     "font_size": 11,
     "platform_colors": {
@@ -96,74 +82,53 @@ Ao executar pela primeira vez, o arquivo `settings.json` é criado automaticamen
 }
 ```
 
-## 🎮 Hotkeys Padrão
+## 🎮 Comandos e Atalhos (Hotkeys)
 
-- **Ctrl+Shift+H**: Mostrar/Esconder janela
-- **Ctrl+Shift+C**: Limpar chat
+### Atalhos de Teclado (Padrão)
+- `Ctrl + Shift + H`: Mostrar/Esconder janela do chat
+- `Ctrl + Shift + C`: Limpar o histórico do chat
 
-## 📝 Comandos no Chat
+### Comandos de Texto (No input do chat)
+- `/clear` - Limpa todas as mensagens da tela
+- `/config` - Abre a janela de configurações da aplicação
 
-- `/clear` - Limpa o chat
-- `/config` - Abre configurações
+---
 
-## ⚠️ Limitações Conhecidas
+## ⚠️ Limitações Conhecidas (API de Terceiros)
 
-### TikTok Live
+**TikTok Live:**
+Pode ocorrer uma perda de aproximadamente **15% das mensagens** de usuários específicos. Isso não é um erro da aplicação, mas sim uma limitação técnica:
+1. A biblioteca de integração (`TikTokLive`) utiliza um proxy externo (`eulerstream.com`) para manter a conexão WebSocket.
+2. Este proxy/API do TikTok muitas vezes filtra usuários que estão com restrições na conta (shadow ban) ou utilizando versões não homologadas do app.
+- *Recomendação:* Esteja ciente dessa limitação atual das APIs públicas do TikTok para desenvolvedores terceiros.
 
-Aproximadamente **15% das mensagens de usuários específicos** podem não aparecer no chat. Isso ocorre porque:
+---
 
-1. A biblioteca TikTokLive usa um servidor de proxy (`eulerstream.com`) para conexão WebSocket
-2. Este servidor pode filtrar mensagens de usuários que:
-   - Estão em shadow ban
-   - Usam versões específicas do app móvel
-   - Têm restrições na conta
-3. Não é um bug no nosso código — é uma limitação da API de terceiros
+## 🏗️ Arquitetura do Sistema
 
-**Solução alternativa**: Não há solução simples no momento. Migrar para uma biblioteca Node.js diferente ou criar um servidor de sign próprio exigiria refactoring significativo.
+A aplicação foi desenhada com foco em performance e concorrência:
+- **Fluxo de Mensagens**: O `ChatManager` inicializa instâncias isoladas (`handlers`) para cada plataforma. Os handlers conectam-se às APIs e enviam sinais (Thread-safe) para o PyQt6 renderizar na interface.
+- **Multithreading**:
+  - `Thread Principal`: Gerencia a UI (PyQt6).
+  - `AsyncManager`: Thread dedicada ao Event Loop do `asyncio` (usado no TikTok e Kick).
+  - `Thread IRC`: Thread dedicada e leve para o socket da Twitch.
+  - `HotkeyManager`: Thread de baixo nível para escuta global de atalhos.
 
-**Recomendação**: Documentar esta limitação para usuários finais.
+## 📦 Build e Compilação
 
-## 🏗️ Arquitetura
-
-### Fluxo de Mensagens
-
-1. **ChatManager** inicia handlers para cada plataforma ativa
-2. **Handlers** conectam-se às APIs e emitem sinais PyQt
-3. **Sinais** são processados na thread principal (thread-safe)
-4. **Fila de mensagens** opcional para atraso entre mensagens
-5. **UI** exibe mensagens com HTML/CSS styling
-
-### Threads e Event Loops
-
-- **Thread principal**: UI do PyQt6
-- **AsyncManager**: Thread dedicada para event loop asyncio (TikTok/Kick)
-- **Thread IRC**: Uma thread por conexão Twitch
-- **HotkeyManager**: Thread para captura global de teclas
-
-## 📦 Build
-
-Para criar executável standalone:
+Para compilar o código em um executável standalone (.exe):
 
 ```bash
 python build.py
 ```
-
-Ou diretamente com PyInstaller:
-
+*Ou utilizando diretamente o PyInstaller:*
 ```bash
 pyinstaller FuriousMultiChatPro.spec
 ```
 
-## 🐛 Debug
+---
 
-O aplicativo cria logs no console. Para salvar erros:
-
-- Erros críticos são salvos em `crash_log.txt`
-
-## 📄 Licença
-
-Projeto proprietário - Furious Multi Chat Pro
-
-## 👥 Autores
-
-Desenvolvido para streamers brasileiros e internacionais.
+<div align="center">
+  <p>Criado com 💜 para a comunidade de streamers.</p>
+  <p><b>Propriedade de Furious Multi Chat Pro</b></p>
+</div>
