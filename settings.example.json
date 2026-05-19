@@ -1,0 +1,23 @@
+{
+    "twitch": "",
+    "tiktok": "",
+    "kick": "",
+    "language": "pt-br",
+    "opacity": 0.8,
+    "theme": "dark",
+    "click_through": false,
+    "blacklist": [],
+    "font_family": "Segoe UI Variable Display",
+    "font_size": 12,
+    "platform_colors": {
+        "twitch": "#6767FF",
+        "tiktok": "#FFF711",
+        "kick": "#53FC18",
+        "system": "#333333"
+    },
+    "always_on_top": false,
+    "glassmorphism": false,
+    "message_delay": 0.0,
+    "hotkey_toggle_visibility": "ctrl+shift+h",
+    "hotkey_clear_chat": "ctrl+shift+c"
+}

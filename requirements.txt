@@ -1,0 +1,9 @@
+PyQt6
+twitchio
+pytchat
+TikTokLive
+kickpython
+PyInstaller
+aiohttp
+keyboard
+httpx
