@@ -48,6 +48,9 @@ def build_exe():
         '--hidden-import=keyboard',
         '--hidden-import=twitchio',
         '--hidden-import=kickpython',
+        '--hidden-import=edge_tts',
+        '--hidden-import=pygame',
+        '--hidden-import=curl_cffi',
         '--uac-admin',                      # Força modo Administrador no .exe
 
         # Incluir pastas externas (Dados)

@@ -7,3 +7,6 @@ PyInstaller
 aiohttp
 keyboard
 httpx
+edge-tts
+pygame-ce
+curl_cffi

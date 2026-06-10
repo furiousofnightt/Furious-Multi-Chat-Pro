@@ -13,6 +13,7 @@ class HotkeyManager(QObject):
     # Sinais enviados para a thread da UI (thread-safe)
     toggle_visibility_requested = pyqtSignal()
     clear_chat_requested = pyqtSignal()
+    toggle_tts_requested = pyqtSignal()
     
     def __init__(self, settings_manager):
         super().__init__()
@@ -27,9 +28,11 @@ class HotkeyManager(QObject):
         
         hotkey_toggle = s.get("hotkey_toggle_visibility", "ctrl+shift+h")
         hotkey_clear  = s.get("hotkey_clear_chat",       "ctrl+shift+c")
+        hotkey_tts    = s.get("hotkey_toggle_tts",       "ctrl+m")
         
         self._register(hotkey_toggle, self.toggle_visibility_requested.emit)
         self._register(hotkey_clear,  self.clear_chat_requested.emit)
+        self._register(hotkey_tts,    self.toggle_tts_requested.emit)
     
     def _register(self, combo: str, callback):
         """Registra um atalho com tratamento de erro (combo inválida não quebra o app)."""

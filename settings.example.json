@@ -19,5 +19,13 @@
     "glassmorphism": false,
     "message_delay": 0.0,
     "hotkey_toggle_visibility": "ctrl+shift+h",
-    "hotkey_clear_chat": "ctrl+shift+c"
+    "hotkey_clear_chat": "ctrl+shift+c",
+    "tts_enabled": true,
+    "tts_volume": 100,
+    "tts_voice_twitch": "pt-BR-AntonioNeural",
+    "tts_voice_tiktok": "pt-BR-FranciscaNeural",
+    "tts_voice_kick": "pt-BR-ThalitaMultilingualNeural",
+    "tts_enabled_twitch": true,
+    "tts_enabled_tiktok": true,
+    "tts_enabled_kick": true
 }

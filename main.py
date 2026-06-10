@@ -65,8 +65,9 @@ def main():
     
     hotkey_manager.toggle_visibility_requested.connect(toggle_window_visibility)
     hotkey_manager.clear_chat_requested.connect(window.clear_chat)
+    hotkey_manager.toggle_tts_requested.connect(window.toggle_tts)
     hotkey_manager.start()
-    print(f"⌨️ Hotkeys ativas: Mostrar/Esconder={settings.settings.get('hotkey_toggle_visibility','ctrl+shift+h')} | Limpar={settings.settings.get('hotkey_clear_chat','ctrl+shift+c')}")
+    print(f"⌨️ Hotkeys ativas: Mostrar/Esconder={settings.settings.get('hotkey_toggle_visibility','ctrl+shift+h')} | Limpar={settings.settings.get('hotkey_clear_chat','ctrl+shift+c')} | Voz={settings.settings.get('hotkey_toggle_tts','ctrl+m')}")
     # ----------------------
     
     def open_config():

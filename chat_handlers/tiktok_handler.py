@@ -163,6 +163,27 @@ class TikTokHandler(BaseChatHandler):
                     uptime_seconds = max(0, int(time.time()) - current_start)
                     self.stats_updated.emit(viewers, uptime_seconds, self._total_likes)
 
+                def _emit_if_new(author, msg):
+                    now = time.time()
+                    msg_key = f"{author}::{msg}"
+                    
+                    if not hasattr(self, "_msg_history_dict"):
+                        self._msg_history_dict = {}
+                        
+                    if msg_key in self._msg_history_dict:
+                        # Se a mesma mensagem chegou em menos de 3 segundos, é o bug de evento duplicado da API do TikTok
+                        # Se demorou mais que 3 segundos, foi o usuário que digitou novamente de propósito!
+                        if now - self._msg_history_dict[msg_key] < 3.0:
+                            return
+                            
+                    self._msg_history_dict[msg_key] = now
+                    
+                    # Limpa o dicionário de tempos em tempos para não gastar memória RAM
+                    if len(self._msg_history_dict) > 100:
+                        self._msg_history_dict = {k: v for k, v in self._msg_history_dict.items() if now - v < 10.0}
+                        
+                    self.message_received.emit(author, msg, "tiktok")
+
                 # FIX #1: on_comment blindado — nenhuma mensagem se perde silenciosamente
                 @self.client.on(CommentEvent)
                 async def on_comment(event: CommentEvent):
@@ -189,7 +210,7 @@ class TikTokHandler(BaseChatHandler):
                             pass
 
                         print(f"[TikTok] {author}: {msg[:50]}...", flush=True)
-                        self.message_received.emit(author, msg, "tiktok")
+                        _emit_if_new(author, msg)
                     except Exception as e:
                         print(f"⚠️ on_comment erro: {e}")
 
@@ -216,7 +237,7 @@ class TikTokHandler(BaseChatHandler):
                                       or "Usuário")
 
                         print(f"[TikTok-Comments] {author}: {msg[:50]}...", flush=True)
-                        self.message_received.emit(author, msg, "tiktok")
+                        _emit_if_new(author, msg)
                     except Exception as e:
                         print(f"⚠️ on_comments erro: {e}")
 
@@ -259,7 +280,7 @@ class TikTokHandler(BaseChatHandler):
                                       or "Usuário")
 
                         print(f"[TikTok-Barrage] {author}: {msg[:50]}...", flush=True)
-                        self.message_received.emit(author, msg, "tiktok")
+                        _emit_if_new(author, msg)
                     except Exception as e:
                         print(f"⚠️ on_barrage erro: {e}")
 
@@ -302,7 +323,7 @@ class TikTokHandler(BaseChatHandler):
                                       or "Usuário")
 
                         print(f"[TikTok-EC] {author}: {msg[:50]}...", flush=True)
-                        self.message_received.emit(author, msg, "tiktok")
+                        _emit_if_new(author, msg)
                     except Exception as e:
                         print(f"⚠️ on_ec_barrage erro: {e}")
 
@@ -380,7 +401,7 @@ class TikTokHandler(BaseChatHandler):
                         if ui:
                             author = (getattr(ui, 'nick_name', None) or getattr(ui, 'nickname', None) or getattr(ui, 'username', None) or "Usuário")
                         
-                        self.message_received.emit(author, msg, "tiktok")
+                        _emit_if_new(author, msg)
                     except Exception as e:
                         print(f"⚠️ on_emote_chat erro: {e}")
 
@@ -392,10 +413,10 @@ class TikTokHandler(BaseChatHandler):
                         display_type = getattr(event, 'display_type', "")
                         if "follow" in display_type.lower():
                             msg = get_translation("follow_started", self.language)
-                            self.message_received.emit(author, msg, "tiktok")
+                            self.message_received.emit(author, msg, "tiktok_event")
                         elif "share" in display_type.lower():
                             msg = get_translation("share_transmitted", self.language)
-                            self.message_received.emit(author, msg, "tiktok")
+                            self.message_received.emit(author, msg, "tiktok_event")
                     except:
                         pass
 
@@ -449,7 +470,7 @@ class TikTokHandler(BaseChatHandler):
                                 print(f"⚠️ [DEBUG] Erro no fallback do gift: {e}")
 
                         msg = get_translation("gift_sent_multiple", self.language, gift_name, icon_html, gift_count)
-                        self.message_received.emit(author, msg, "tiktok")
+                        self.message_received.emit(author, msg, "tiktok_event")
                     except Exception as e:
                         print(f"⚠️ Erro ao processar presente: {e}")
 
@@ -459,7 +480,7 @@ class TikTokHandler(BaseChatHandler):
                     try:
                         author = getattr(event.user, 'nickname', getattr(event.user, 'nick_name', "Usuário"))
                         msg = get_translation("follow_started", self.language)
-                        self.message_received.emit(author, msg, "tiktok")
+                        self.message_received.emit(author, msg, "tiktok_event")
                     except:
                         pass
 
@@ -468,7 +489,7 @@ class TikTokHandler(BaseChatHandler):
                     try:
                         author = getattr(event.user, 'nickname', getattr(event.user, 'nick_name', "Usuário"))
                         msg = get_translation("share_transmitted", self.language)
-                        self.message_received.emit(author, msg, "tiktok")
+                        self.message_received.emit(author, msg, "tiktok_event")
                     except:
                         pass
 

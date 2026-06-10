@@ -241,6 +241,63 @@ class ConfigWindow(QDialog):
         dl_row.addWidget(self.delay_slider); dl_row.addWidget(self.delay_val_label)
         left_layout.addLayout(dl_row)
 
+        sep_tts = QFrame(); sep_tts.setFrameShape(QFrame.Shape.HLine); sep_tts.setStyleSheet("color: #333; margin: 6px 0;")
+        left_layout.addWidget(sep_tts)
+        section_label("Voz do Bot (TTS)", left_layout, "settings.svg")
+
+        self.tts_enable_check = QCheckBox("Ativar Leitura de Chat (TTS)")
+        self.tts_enable_check.setChecked(self.settings_manager.settings.get("tts_enabled", True))
+        left_layout.addWidget(self.tts_enable_check)
+        
+        vol_row = QHBoxLayout()
+        vol_row.addWidget(QLabel("Volume da Voz"))
+        self.tts_volume_slider = QSlider(Qt.Orientation.Horizontal)
+        self.tts_volume_slider.setRange(0, 100)
+        current_vol = self.settings_manager.settings.get("tts_volume", 100)
+        self.tts_volume_slider.setValue(int(current_vol))
+        self.tts_volume_val_label = QLabel(f"{current_vol}%")
+        self.tts_volume_val_label.setFixedWidth(36)
+        self.tts_volume_slider.valueChanged.connect(lambda v: self.tts_volume_val_label.setText(f"{v}%"))
+        vol_row.addWidget(self.tts_volume_slider); vol_row.addWidget(self.tts_volume_val_label)
+        left_layout.addLayout(vol_row)
+
+        self.voices_list = [
+            ("Antônio (Masculino)", "pt-BR-AntonioNeural"),
+            ("Francisca (Feminina)", "pt-BR-FranciscaNeural"),
+            ("Thalita (Feminina)", "pt-BR-ThalitaMultilingualNeural")
+        ]
+        
+        def create_voice_combo(platform_name, config_key, default_voice):
+            row = QHBoxLayout()
+            
+            # Checkbox da plataforma
+            check_key = f"tts_enabled_{platform_name.lower()}"
+            check = QCheckBox(platform_name)
+            check.setChecked(self.settings_manager.settings.get(check_key, True))
+            check.setFixedWidth(65)
+            row.addWidget(check)
+            setattr(self, f"check_{platform_name.lower()}", check)
+            
+            combo = QComboBox()
+            for name, code in self.voices_list:
+                combo.addItem(name, code)
+            
+            current_voice = self.settings_manager.settings.get(config_key, default_voice)
+            index = combo.findData(current_voice)
+            if index >= 0:
+                combo.setCurrentIndex(index)
+                
+            row.addWidget(combo)
+            return combo, row
+            
+        self.combo_twitch, row_tw = create_voice_combo("Twitch", "tts_voice_twitch", "pt-BR-AntonioNeural")
+        self.combo_tiktok, row_tt = create_voice_combo("TikTok", "tts_voice_tiktok", "pt-BR-FranciscaNeural")
+        self.combo_kick, row_kk = create_voice_combo("Kick", "tts_voice_kick", "pt-BR-ThalitaMultilingualNeural")
+        
+        left_layout.addLayout(row_tw)
+        left_layout.addLayout(row_tt)
+        left_layout.addLayout(row_kk)
+
         left_layout.addWidget(QLabel(get_translation("language_label", lang)))
         self.lang_combo = QComboBox()
         self.lang_codes = get_available_languages()
@@ -469,6 +526,17 @@ class ConfigWindow(QDialog):
         self.settings_manager.settings["glassmorphism"] = self.glass_check.isChecked()
         self.settings_manager.settings["message_delay"] = self.delay_slider.value() / 10.0
         
+        self.settings_manager.settings["tts_enabled"] = self.tts_enable_check.isChecked()
+        self.settings_manager.settings["tts_volume"] = self.tts_volume_slider.value()
+        
+        self.settings_manager.settings["tts_enabled_twitch"] = self.check_twitch.isChecked()
+        self.settings_manager.settings["tts_enabled_tiktok"] = self.check_tiktok.isChecked()
+        self.settings_manager.settings["tts_enabled_kick"] = self.check_kick.isChecked()
+        
+        self.settings_manager.settings["tts_voice_twitch"] = self.combo_twitch.currentData()
+        self.settings_manager.settings["tts_voice_tiktok"] = self.combo_tiktok.currentData()
+        self.settings_manager.settings["tts_voice_kick"] = self.combo_kick.currentData()
+        
         current_lang_index = self.lang_combo.currentIndex()
         self.settings_manager.settings["language"] = self.lang_codes[current_lang_index] if current_lang_index < len(self.lang_codes) else "pt-br"
         
@@ -483,4 +551,9 @@ class ConfigWindow(QDialog):
         self.settings_manager.settings["hotkey_clear_chat"] = self.hotkey_clear_field.text().strip() or "ctrl+shift+c"
         
         self.settings_manager.save_settings()
+        
+        # Ao salvar, limpa toda a fila de voz antiga para aplicar as configurações apenas em novas mensagens
+        if hasattr(self.main_window, "tts_manager"):
+            self.main_window.tts_manager.clear_queue()
+            
         self.accept()

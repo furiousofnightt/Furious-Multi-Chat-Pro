@@ -32,6 +32,7 @@ O **Furious Multi Chat Pro** é uma aplicação desktop de alta performance cria
 - **🔔 Notificações Visuais**: Alertas em formato de banner animado quando novos espectadores entram na live.
 - **🛡️ Ferramentas de Moderação**: Sistema de *Blacklist* para censurar automaticamente palavras indesejadas.
 - **⏳ Controle de Leitura**: Sistema de atraso e espaçamento de mensagens para facilitar a leitura em chats muito movimentados.
+- **🗣️ Bot de Voz Neural (TTS)**: Leitura de mensagens com vozes de alta fidelidade (Azure), configuração independente por plataforma e filtro anti-spam.
 - **🌍 Internacionalização**: Suporte nativo para Português (Brasil) e Inglês.
 
 ---
@@ -78,7 +79,12 @@ Na primeira execução, o sistema gerará automaticamente o arquivo `settings.js
         "tiktok": "#FF0050",
         "kick": "#53FC18",
         "system": "#333333"
-    }
+    },
+    "tts_enabled": true,
+    "tts_volume": 100,
+    "tts_voice_twitch": "pt-BR-FranciscaNeural",
+    "tts_voice_tiktok": "pt-BR-FranciscaNeural",
+    "tts_voice_kick": "pt-BR-ThalitaMultilingualNeural"
 }
 ```
 
@@ -87,6 +93,7 @@ Na primeira execução, o sistema gerará automaticamente o arquivo `settings.js
 ### Atalhos de Teclado (Padrão)
 - `Ctrl + Shift + H`: Mostrar/Esconder janela do chat
 - `Ctrl + Shift + C`: Limpar o histórico do chat
+- `Ctrl + M`: Ativar/Desativar o Bot de Voz Neural (TTS)
 
 ### Comandos de Texto (No input do chat)
 - `/clear` - Limpa todas as mensagens da tela

@@ -147,6 +147,15 @@ class BaseChatHandler(QObject):
 - **Responsabilidade**: Resolver caminhos em dev vs PyInstaller
 - **Uso**: `resource_path("assets/icon.png")`
 
+#### TTS Engine (`tts_engine.py`)
+- **Responsabilidade**: Geração assíncrona e reprodução de voz neural
+- **Tecnologias**: `edge-tts` (Azure) e `pygame.mixer`
+- **Recursos**:
+  - Download assíncrono para arquivos temporários
+  - Filtros Anti-Spam e remoção de HTML/links
+  - Controle de volume e mutar global via hotkey
+  - Fila thread-safe de mensagens (`deque`)
+
 ## Fluxo de Dados
 
 ### Recebimento de Mensagem

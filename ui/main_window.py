@@ -13,6 +13,7 @@ from collections import deque
 from utils.blur_window import apply_blur
 from utils.translations import get_translation
 from utils.resource_path import resource_path
+from utils.tts_engine import TTSManager
 
 
 class JoinNotificationBanner(QFrame):
@@ -265,6 +266,7 @@ class ChatWindow(QMainWindow):
         self._drag_pos = QPoint()
         self._auto_scroll = True   # Auto-scroll ativado por padrão
         self._user_scrolled = False # True = usuário subiu o chat manualmente
+        self.tts_manager = TTSManager(parent=self)
         self.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.customContextMenuRequested.connect(self.show_context_menu)
         
@@ -343,6 +345,12 @@ class ChatWindow(QMainWindow):
         label = get_translation("system_label", lang)
         msg = get_translation("chat_cleared", lang)
         self.add_message(label, msg, "system")
+
+    def toggle_tts(self):
+        if hasattr(self, 'tts_manager'):
+            is_muted = self.tts_manager.toggle_mute()
+            status = "Desativada" if is_muted else "Ativada"
+            self.add_message("Sistema", f"🔊 Voz do Bot {status}!", "system")
 
     def setup_tray(self):
         """ Configura o ícone na bandeja do sistema (Tray) """
@@ -829,6 +837,10 @@ class ChatWindow(QMainWindow):
         msg_layout.setContentsMargins(6, 2, 6, 2)  # Margem top/bottom menor para compactar as mensagens
         msg_widget._animations = []  # Manter as animações vivas
         
+        # Enviar para TTS Manager apenas mensagens de chat real (não eventos de follow/gift/share)
+        if platform not in ("system", "tiktok_event") and hasattr(self, 'tts_manager'):
+            self.tts_manager.add_message(user, text, platform)
+            
         try:
             # Cores e Estilos dos Badges (Dinâmicos via Settings)
             platform_colors = {}
@@ -841,11 +853,12 @@ class ChatWindow(QMainWindow):
                 font_size = self.settings_manager.settings.get("font_size", font_size)
             
             # Fallbacks caso o dicionário esteja incompleto
-            bg_color = platform_colors.get(platform, "#555555")
-            label_text = {"twitch": "TW", "tiktok": "TT", "kick": "KK", "system": "MSG"}.get(platform, "??")
+            bg_color = platform_colors.get(platform, platform_colors.get("tiktok", "#555555") if platform == "tiktok_event" else "#555555")
+            label_text = {"twitch": "TW", "tiktok": "TT", "tiktok_event": "TT", "kick": "KK", "system": "MSG"}.get(platform, "??")
             text_color = "black" if platform == "kick" else "white"
             
-            # Badge da Plataforma (Ícone ou Texto)
+            icon_platform = "tiktok" if platform == "tiktok_event" else platform
+            icon_path = resource_path(f"assets/{icon_platform.lower()}.png")
             badge_label = QLabel()
             badge_label.setFixedSize(22, 22)
             badge_label.setScaledContents(True)
@@ -887,7 +900,16 @@ class ChatWindow(QMainWindow):
                 return lbl
 
             # User (Pode vir com badges estáticos embutidos da própria classe handler)
-            safe_user = html.escape(str(user))
+            # Preserva as tags <img> dos badges mas escapa o texto do nome
+            user_parts = re.split(r"(<img[^>]+>)", str(user))
+            safe_user_parts = []
+            for p in user_parts:
+                if p.startswith("<img"):
+                    safe_user_parts.append(p)
+                else:
+                    safe_user_parts.append(html.escape(p))
+            safe_user = "".join(safe_user_parts)
+            
             user_lbl = create_text(f"<span style='{name_style}'><b>{safe_user}:</b></span>")
             msg_layout.addWidget(user_lbl)
             

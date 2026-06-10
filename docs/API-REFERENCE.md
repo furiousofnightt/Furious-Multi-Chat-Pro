@@ -278,6 +278,31 @@ Resolve caminho relativo para absoluto, funcionando em:
 
 ---
 
+### TTS Engine (`tts_engine.py`)
+
+Sistema de geração e reprodução de voz.
+
+```python
+class TTSManager(QObject):
+    def __init__(self, parent=None):
+```
+
+#### Características
+- Baseado no `edge-tts` (vozes neurais Azure)
+- Player via `pygame.mixer` (reprodução simultânea de SFX/TTS)
+- Usa thread de baixo nível para download de áudio.
+
+#### Métodos Principais
+- `read_message(username: str, msg: str, platform: str)` - Processa e enfileira uma mensagem.
+- `toggle_mute() -> bool` - Ativa ou desativa a reprodução de voz e limpa a fila.
+- `clear_queue()` - Esvazia a fila de leitura e encerra a voz atual se estiver tocando.
+- `play_sfx(filename: str)` - Toca efeitos sonoros pequenos sem travar o áudio TTS.
+
+#### Componentes Auxiliares
+- `TextCleaner`: Filtra mensagens, limitando repetições (spam) e removendo URLs/Tags HTML antes da leitura.
+
+---
+
 ## UI Components
 
 ### ChatWindow
