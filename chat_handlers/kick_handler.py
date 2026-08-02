@@ -85,7 +85,7 @@ class KickHandler(BaseChatHandler):
                     msg = get_translation("kick_connected", self.language, self.username)
                     self.message_received.emit(get_translation("kick_connect_attempt", self.language), msg, "system")
                     self.status_changed.emit(True)
-                    self.stats_updated.emit(0, 0, 0) # Dispara Failsafe pro Cronômetro Genérico
+                    self.stats_updated.emit(0, 0, 0, 0) # Dispara Failsafe pro Cronômetro Genérico
                 
                 self.message_received.emit(author, content, "kick")
             except:
@@ -106,12 +106,70 @@ class KickHandler(BaseChatHandler):
             connect_and_listen(), 
             self.loop
         )
+        
+        # Iniciar polling de viewers do Kick
+        async def poll_viewers():
+            import sqlite3
+            import os
+            try:
+                from curl_cffi import requests
+            except ImportError:
+                print("[Kick] curl_cffi não encontrado, não será possível atualizar viewers.")
+                return
+                
+            await asyncio.sleep(5)
+            while self.is_running:
+                try:
+                    token = None
+                    if os.path.exists("kick_tokens.db"):
+                        try:
+                            conn = sqlite3.connect("kick_tokens.db")
+                            row = conn.execute("SELECT access_token FROM tokens LIMIT 1").fetchone()
+                            if row:
+                                token = row[0]
+                            conn.close()
+                        except Exception: pass
+                            
+                    headers = {
+                        "Accept": "application/json",
+                    }
+                    if token:
+                        headers["Authorization"] = f"Bearer {token}"
+                        
+                    resp = requests.get(
+                        f"https://kick.com/api/v2/channels/{self.username}", 
+                        headers=headers,
+                        impersonate="chrome120",
+                        timeout=10
+                    )
+                    
+                    if resp.status_code == 200:
+                        if not self.connected:
+                            self.connected = True
+                            msg = get_translation("kick_connected", self.language, self.username)
+                            self.message_received.emit(get_translation("kick_connect_attempt", self.language), msg, "system")
+                            self.status_changed.emit(True)
+                            
+                        data = resp.json()
+                        ls = data.get("livestream") or data.get("live_stream")
+                        viewers = ls.get("viewer_count", 0) if ls else 0
+                        self.stats_updated.emit(viewers, 0, 0, 0)
+                except Exception as e:
+                    print(f"[Kick] Erro ao buscar viewers: {e}")
+                    
+                for _ in range(30):
+                    if not self.is_running: break
+                    await asyncio.sleep(1)
+                    
+        self.viewers_task = asyncio.run_coroutine_threadsafe(poll_viewers(), self.loop)
 
     def stop(self):
         self.is_running = False
         if self.task:
-            try:
-                self.task.cancel()
+            try: self.task.cancel()
+            except: pass
+        if hasattr(self, 'viewers_task') and self.viewers_task:
+            try: self.viewers_task.cancel()
             except: pass
             
         if self.api and self.loop:

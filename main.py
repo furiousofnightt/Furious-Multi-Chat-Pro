@@ -2,9 +2,16 @@ import sys
 import signal
 import os
 import traceback
+
+
+
 from PyQt6.QtWidgets import QApplication
 from PyQt6.QtGui import QFontDatabase
-from PyQt6.QtCore import QTimer
+from PyQt6.QtCore import QTimer, Qt
+
+# Necessário ser definido ANTES de criar o QApplication para o WebEngine funcionar,
+# mas sem carregar o Chromium no startup (carregamento lazy quando a janela de login abre)
+QApplication.setAttribute(Qt.ApplicationAttribute.AA_ShareOpenGLContexts)
 from ui.main_window import ChatWindow
 from ui.config_window import ConfigWindow
 from core.settings_manager import SettingsManager

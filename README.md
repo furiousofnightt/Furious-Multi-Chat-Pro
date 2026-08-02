@@ -24,7 +24,9 @@ O **Furious Multi Chat Pro** é uma aplicação desktop de alta performance cria
 
 ## ✨ Principais Funcionalidades
 
-- **🌐 Chat Multi-Plataforma**: Capture e visualize mensagens do Twitch, TikTok e Kick em tempo real e em uma única janela.
+- **🌐 Chat Multi-Plataforma**: Capture e visualize mensagens do Twitch, TikTok e Kick em tempo real em uma única janela.
+- **📊 Estatísticas em Tempo Real**: Painel com viewers online, **total de visualizações acumuladas** (TikTok), uptime da transmissão e curtidas — tudo atualizado ao vivo.
+- **🟢 Status de Conexão Inteligente**: Tooltip nos viewers que exibe o estado real de cada plataforma — "Offline" quando desconectada, "0" quando conectada mas sem espectadores, e o número real quando há viewers.
 - **🎨 Design Premium & Glassmorphism**: Interface moderna, fluida e com suporte a transparência e efeito blur (desfoque nativo do Windows).
 - **👻 Overlay Inteligente**: Modo "Sempre no Topo" (Always-on-top) com opacidade ajustável e função "Click-through" (clique através do chat) para não atrapalhar sua gameplay.
 - **⌨️ Hotkeys Globais**: Atalhos de teclado customizáveis para ocultar/exibir ou limpar o chat rapidamente.
@@ -33,6 +35,7 @@ O **Furious Multi Chat Pro** é uma aplicação desktop de alta performance cria
 - **🛡️ Ferramentas de Moderação**: Sistema de *Blacklist* para censurar automaticamente palavras indesejadas.
 - **⏳ Controle de Leitura**: Sistema de atraso e espaçamento de mensagens para facilitar a leitura em chats muito movimentados.
 - **🗣️ Bot de Voz Neural (TTS)**: Leitura de mensagens com vozes de alta fidelidade (Azure), configuração independente por plataforma e filtro anti-spam.
+- **🔒 Segurança de Dados (DPAPI)**: O token de sessão do TikTok é armazenado criptografado no `settings.json` usando a **Windows DPAPI**, vinculado ao usuário do Windows — ilegível por vírus ou outros programas.
 - **🌍 Internacionalização**: Suporte nativo para Português (Brasil) e Inglês.
 
 ---
@@ -60,7 +63,9 @@ Se você deseja rodar a aplicação a partir do código-fonte:
 
 ## 🔧 Configuração
 
-Na primeira execução, o sistema gerará automaticamente o arquivo `settings.json` contendo suas preferências. Você pode editá-lo diretamente ou através da aba de configurações dentro da própria interface:
+Na primeira execução, o sistema gerará automaticamente o arquivo `settings.json` contendo suas preferências. Configure através da aba de configurações (ícone ⚙️) dentro da própria interface.
+
+> **Nota de segurança**: O campo `tiktok_session_id` é salvo automaticamente criptografado com a DPAPI do Windows. Você verá um valor `DPAPI:...` no arquivo — isso é correto e esperado.
 
 ```json
 {
@@ -80,11 +85,14 @@ Na primeira execução, o sistema gerará automaticamente o arquivo `settings.js
         "kick": "#53FC18",
         "system": "#333333"
     },
-    "tts_enabled": true,
+    "tts_enabled": false,
     "tts_volume": 100,
-    "tts_voice_twitch": "pt-BR-FranciscaNeural",
+    "tts_voice_twitch": "pt-BR-AntonioNeural",
     "tts_voice_tiktok": "pt-BR-FranciscaNeural",
-    "tts_voice_kick": "pt-BR-ThalitaMultilingualNeural"
+    "tts_voice_kick": "pt-BR-ThalitaMultilingualNeural",
+    "hotkey_toggle_visibility": "ctrl+shift+h",
+    "hotkey_clear_chat": "ctrl+shift+c",
+    "tiktok_session_id": "DPAPI:..."
 }
 ```
 
@@ -101,20 +109,31 @@ Na primeira execução, o sistema gerará automaticamente o arquivo `settings.js
 
 ---
 
+## 🔒 Segurança dos Dados
+
+O campo `tiktok_session_id` no `settings.json` é criptografado automaticamente usando a **DPAPI (Data Protection API)** do Windows:
+
+- A chave de criptografia está vinculada ao **usuário Windows logado** na máquina.
+- Se o arquivo `settings.json` for copiado para outro computador, o token **não pode ser descriptografado**.
+- Vírus do tipo "infostealer" que roubem o arquivo só verão dados ilegíveis (`DPAPI:AQAAANCMnd8...`).
+- Nenhuma ação extra é necessária por parte do usuário — a criptografia é totalmente automática.
+
+---
+
 ## ⚠️ Limitações Conhecidas (API de Terceiros)
 
 **TikTok Live:**
-Pode ocorrer uma perda de aproximadamente **15% das mensagens** de usuários específicos. Isso não é um erro da aplicação, mas sim uma limitação técnica:
-1. A biblioteca de integração (`TikTokLive`) utiliza um proxy externo (`eulerstream.com`) para manter a conexão WebSocket.
-2. Este proxy/API do TikTok muitas vezes filtra usuários que estão com restrições na conta (shadow ban) ou utilizando versões não homologadas do app.
-- *Recomendação:* Esteja ciente dessa limitação atual das APIs públicas do TikTok para desenvolvedores terceiros.
+Pode ocorrer uma perda de aproximadamente **10-15% das mensagens** de usuários específicos. Isso não é um erro da aplicação, mas sim uma limitação técnica da biblioteca `TikTokLive` que utiliza um proxy externo (`eulerstream.com`) para manter a conexão WebSocket. Este proxy pode filtrar mensagens de certos perfis.
+
+- *Detalhes técnicos:* Ver `docs/TIKTOK-LIMITACOES.md`
 
 ---
 
 ## 🏗️ Arquitetura do Sistema
 
 A aplicação foi desenhada com foco em performance e concorrência:
-- **Fluxo de Mensagens**: O `ChatManager` inicializa instâncias isoladas (`handlers`) para cada plataforma. Os handlers conectam-se às APIs e enviam sinais (Thread-safe) para o PyQt6 renderizar na interface.
+- **Fluxo de Mensagens**: O `ChatManager` inicializa instâncias isoladas (`handlers`) para cada plataforma. Os handlers conectam-se às APIs e enviam sinais (Thread-safe via PyQt6) para o `ChatWindow` renderizar na interface.
+- **Fluxo de Stats**: O sinal `stats_updated(viewers, uptime, likes, total_views)` carrega 4 valores. O `ChatManager` propaga para a UI junto com o dicionário de status de conexão de cada plataforma.
 - **Multithreading**:
   - `Thread Principal`: Gerencia a UI (PyQt6).
   - `AsyncManager`: Thread dedicada ao Event Loop do `asyncio` (usado no TikTok e Kick).
@@ -128,10 +147,8 @@ Para compilar o código em um executável standalone (.exe):
 ```bash
 python build.py
 ```
-*Ou utilizando diretamente o PyInstaller:*
-```bash
-pyinstaller FuriousMultiChatPro.spec
-```
+
+O script `build.py` já inclui todas as flags necessárias, incluindo `--hidden-import=win32crypt` para a criptografia DPAPI funcionar corretamente no executável.
 
 ---
 

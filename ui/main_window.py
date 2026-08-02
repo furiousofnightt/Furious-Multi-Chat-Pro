@@ -418,19 +418,25 @@ class ChatWindow(QMainWindow):
         """ Reseta todos os contadores da interface para o estado inicial """
         self._live_start_time = None
         self.viewers_lbl.setText("-")
+        self.total_views_lbl.setText("-")
         self.uptime_lbl.setText("0:00:00")
         self.likes_lbl.setText("0")
 
-    def update_live_stats(self, viewers, uptime_seconds, likes=0):
+    def update_live_stats(self, viewers, uptime_seconds, likes=0, total_views=0):
         try: viewers = int(viewers)
         except: viewers = 0
         try: uptime_seconds = int(uptime_seconds)
         except: uptime_seconds = 0
         try: likes = int(likes)
         except: likes = 0
+        try: total_views = int(total_views)
+        except: total_views = 0
         
         if viewers > 0 or self.viewers_lbl.text() == "-":
             self.viewers_lbl.setText(self.format_stat_number(viewers) if viewers > 0 else "-")
+            
+        if total_views > 0 or self.total_views_lbl.text() == "-":
+            self.total_views_lbl.setText(self.format_stat_number(total_views) if total_views > 0 else "-")
         
         # Atualiza curtidas
         self.likes_lbl.setText(self.format_stat_number(likes))
@@ -444,6 +450,66 @@ class ChatWindow(QMainWindow):
             self._live_start_time = time.time()
             
         self._update_uptime_display()
+
+    def update_secondary_viewers(self, platform_viewers: dict, platform_status: dict = None):
+        if platform_status is None:
+            platform_status = {}
+            
+        from utils.resource_path import resource_path
+        import os
+        
+        # Preparar o caminho do SVG para uso no HTML do Qt
+        eye_path = resource_path("assets/eye.svg").replace('\\', '/')
+        eye_icon = f"<img src='file:///{eye_path}' width='12' height='12'>"
+        
+        ttk = platform_viewers.get("tiktok", 0)
+        tw  = platform_viewers.get("twitch", 0)
+        kk  = platform_viewers.get("kick", 0)
+        
+        is_ttk_connected = platform_status.get("tiktok", False)
+        is_tw_connected = platform_status.get("twitch", False)
+        is_kk_connected = platform_status.get("kick", False)
+        
+        # Se for tudo vazio e offline, exibe o default
+        if ttk == 0 and tw == 0 and kk == 0 and not any([is_ttk_connected, is_tw_connected, is_kk_connected]):
+            self.viewers_lbl.setToolTip(f"<html>{eye_icon} Views (Baseado na plataforma primária)</html>")
+            return
+
+        # HTML Formatted Tooltip
+        html = [
+            f"<html><div style='margin-bottom: 4px;'>{eye_icon} <b>Views</b></div>",
+            "<table style='margin-top: 4px;' cellpadding='1' cellspacing='0'>"
+        ]
+        
+        if ttk > 0:
+            html.append(f"<tr><td style='padding-right: 10px;'>TikTok:</td><td><b>{self.format_stat_number(ttk)}</b></td></tr>")
+        elif is_ttk_connected:
+            html.append("<tr><td style='padding-right: 10px;'>TikTok:</td><td style='color: #00e6e6;'>0</td></tr>")
+        else:
+            html.append("<tr><td style='padding-right: 10px; color: #888;'>TikTok:</td><td style='color: #888;'>Offline</td></tr>")
+            
+        if tw > 0:
+            html.append(f"<tr><td style='padding-right: 10px;'>Twitch:</td><td><b>{self.format_stat_number(tw)}</b></td></tr>")
+        elif is_tw_connected:
+            html.append("<tr><td style='padding-right: 10px;'>Twitch:</td><td style='color: #a970ff;'>0</td></tr>")
+        else:
+            html.append("<tr><td style='padding-right: 10px; color: #888;'>Twitch:</td><td style='color: #888;'>Offline</td></tr>")
+            
+        if kk > 0:
+            html.append(f"<tr><td style='padding-right: 10px;'>Kick:</td><td><b>{self.format_stat_number(kk)}</b></td></tr>")
+        elif is_kk_connected:
+            html.append("<tr><td style='padding-right: 10px;'>Kick:</td><td style='color: #53fc18;'>0</td></tr>")
+        else:
+            html.append("<tr><td style='padding-right: 10px; color: #888;'>Kick:</td><td style='color: #888;'>Offline</td></tr>")
+        
+        html.append("</table></html>")
+        
+        self.viewers_lbl.setToolTip("".join(html))
+
+    def _force_show_viewers_tooltip(self):
+        from PyQt6.QtWidgets import QToolTip
+        from PyQt6.QtGui import QCursor
+        QToolTip.showText(QCursor.pos(), self.viewers_lbl.toolTip(), self.viewers_lbl)
 
     def _update_uptime_display(self):
         if not self._live_start_time:
@@ -546,9 +612,18 @@ class ChatWindow(QMainWindow):
         self.viewers_lbl = QPushButton("-")
         self.viewers_lbl.setIcon(QIcon(resource_path("assets/eye.svg")))
         self.viewers_lbl.setIconSize(QSize(14, 14)) # Ícone um pouco menor
-        self.viewers_lbl.setToolTip("Espectadores ao vivo. (Baseado na plataforma primária)")
+        self.viewers_lbl.setToolTip("Views (Baseado na plataforma primária)")
         self.viewers_lbl.setStyleSheet("color: #00e6e6; font-size: 12px; font-weight: bold; background: transparent; padding-top: 0px; border: none; text-align: left;")
-        self.viewers_lbl.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        # Cursor vira mãozinha pra indicar que é clicável
+        self.viewers_lbl.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.viewers_lbl.clicked.connect(self._force_show_viewers_tooltip)
+        
+        self.total_views_lbl = QPushButton("-")
+        self.total_views_lbl.setIcon(QIcon(resource_path("assets/users.svg")))
+        self.total_views_lbl.setIconSize(QSize(14, 14))
+        self.total_views_lbl.setToolTip("Total de Views Acumulados (TikTok)")
+        self.total_views_lbl.setStyleSheet("color: #00e6e6; font-size: 12px; font-weight: bold; background: transparent; padding-top: 0px; border: none; text-align: left;")
+        self.total_views_lbl.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         
         self.uptime_lbl = QPushButton("0:00:00")
         self.uptime_lbl.setIcon(QIcon(resource_path("assets/clock.svg")))
@@ -565,6 +640,7 @@ class ChatWindow(QMainWindow):
         self.likes_lbl.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         
         stats_layout.addWidget(self.viewers_lbl)
+        stats_layout.addWidget(self.total_views_lbl)
         stats_layout.addWidget(self.uptime_lbl)
         stats_layout.addWidget(self.likes_lbl)
         stats_layout.addStretch() # Compacta os botões à esquerda
@@ -630,20 +706,7 @@ class ChatWindow(QMainWindow):
         self.pin_btn.clicked.connect(self.toggle_pin)
         header_layout.addWidget(self.pin_btn)
 
-        # Botão Minimizar
-        self.min_btn = QPushButton("—")
-        self.min_btn.setFixedSize(30, 30)
-        self.min_btn.setToolTip("Minimizar janela")
-        self.min_btn.setStyleSheet("""
-            QPushButton { 
-                background: transparent; color: white; border: none; font-size: 14px; 
-            }
-            QPushButton:hover { 
-                background-color: rgba(255, 255, 255, 30); border-radius: 5px; 
-            }
-        """)
-        self.min_btn.clicked.connect(self.showMinimized)
-        header_layout.addWidget(self.min_btn)
+
 
         # Botão Fechar
         self.close_btn = QPushButton("✕")
@@ -864,7 +927,6 @@ class ChatWindow(QMainWindow):
             badge_label.setScaledContents(True)
             badge_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
             
-            icon_path = resource_path(f"assets/{platform.lower()}.png")
             pixmap = QPixmap(icon_path)
             
             if not pixmap.isNull():
@@ -957,11 +1019,33 @@ class ChatWindow(QMainWindow):
                         
                         msg_layout.addWidget(emote_lbl)
                 else:
-                    # Textos são quebrados por palavras para o FlowLayout poder quebrar a linha na tela
+                    # Textos são quebrados por palavras para o FlowLayout poder quebrar a linha na tela.
+                    # PROBLEMA CJK: Japonês/Chinês/Coreano não usa espaços, então um texto longo como
+                    # "家族の応援に感謝します" vira uma única "palavra" de 400px que não cabe e não quebra.
+                    # SOLUÇÃO: Detectar caracteres CJK e chunkar em grupos de 6 para permitir wrapping.
+                    def _has_cjk(s):
+                        for c in s:
+                            cp = ord(c)
+                            if (0x4E00 <= cp <= 0x9FFF or  # CJK Unificado (Chinês/Japonês/Coreano)
+                                0x3040 <= cp <= 0x309F or  # Hiragana
+                                0x30A0 <= cp <= 0x30FF or  # Katakana
+                                0xFF00 <= cp <= 0xFFEF or  # Forma de largura total
+                                0x3000 <= cp <= 0x303F):   # Símbolos e Pontuação CJK
+                                return True
+                        return False
+
                     words = part.split(' ')
                     for w in words:
-                        if w:
-                            safe_word = html.escape(str(w))
+                        if not w:
+                            continue
+                        # Se a "palavra" contiver CJK e for longa, quebrar em chunks de 6 chars
+                        # 6 chars CJK ≈ 90px de largura, cabe bem numa janela de 405px
+                        if _has_cjk(w) and len(w) > 6:
+                            chunks = [w[i:i+6] for i in range(0, len(w), 6)]
+                        else:
+                            chunks = [w]
+                        for chunk in chunks:
+                            safe_word = html.escape(str(chunk))
                             w_lbl = create_text(f"<b>{safe_word}</b>")
                             msg_layout.addWidget(w_lbl)
             
@@ -972,11 +1056,15 @@ class ChatWindow(QMainWindow):
             vp_width = self.scroll_area.viewport().width()
             if vp_width > 0:
                 self.chat_container.setFixedWidth(vp_width)
-                # Calcular altura com um recuo (offset) de margem (25px para segurança com scrollbar e padding)
-                # Isso impede que letras largas como 'D' forcem uma quebra de linha não prevista no cálculo original
-                h = msg_layout.heightForWidth(vp_width - 25)
+                # Margem total real:
+                #   chat_layout: 10px (esq) + 25px (dir) = 35px
+                #   msg_layout:   6px (esq) +  6px (dir) = 12px
+                #   Total: ~47px + 5px de segurança extra = 52px
+                # Usar offset correto evita subestimar o número de linhas
+                # e o +20 de buffer vertical garante que nenhuma linha seja cortada
+                h = msg_layout.heightForWidth(vp_width - 52)
                 if h > 0:
-                    msg_widget.setMaximumHeight(h + 10)
+                    msg_widget.setMaximumHeight(h + 20)
             
             # Garante que o resize considere quebra de linha nova
             self.chat_layout.invalidate()
@@ -1105,7 +1193,8 @@ class ChatWindow(QMainWindow):
                     if self.header.rect().contains(h_pos):
                         # Ignorar se clicar nos botões do header
                         if not self.close_btn.rect().contains(self.close_btn.mapFromGlobal(global_pos)) and \
-                           not self.settings_btn.rect().contains(self.settings_btn.mapFromGlobal(global_pos)):
+                           not self.settings_btn.rect().contains(self.settings_btn.mapFromGlobal(global_pos)) and \
+                           not self.viewers_lbl.rect().contains(self.viewers_lbl.mapFromGlobal(global_pos)):
                             self._drag_pos = global_pos - self.frameGeometry().topLeft()
                             return True
                     

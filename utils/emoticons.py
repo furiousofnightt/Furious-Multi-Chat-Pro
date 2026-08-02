@@ -278,18 +278,49 @@ EMOTICONS_MAP = {
 
 def convert_emoticons(text):
     """
-    Converte emoticons de código para emojis.
+    Converte emoticons de código para emojis de forma segura.
+    
+    - Protege URLs antes de aplicar substituições para não quebrar links.
+    - Emotes entre colchetes (ex: [laugh]) são substituídos globalmente.
+    - Emotes alfanuméricos (ex: KEKW, GG) só são substituídos quando estão
+      isolados como palavras completas (word boundary), para não afetar
+      substrings dentro de palavras normais.
     
     Args:
-        text (str): Texto contendo emoticons no formato [codigo]
+        text (str): Texto contendo emoticons
         
     Returns:
         str: Texto com emoticons convertidos para emojis
     """
-    result = text
+    import re
+
+    # --- Passo 1: Extrair e proteger URLs ---
+    # Substitui cada URL por um token temporário único
+    url_pattern = re.compile(r'https?://[^\s<>"\']+|www\.[^\s<>"\']+', re.IGNORECASE)
+    urls = []
+    def _protect_url(m):
+        placeholder = f"\x00URL{len(urls)}\x00"
+        urls.append(m.group(0))
+        return placeholder
+    protected = url_pattern.sub(_protect_url, text)
+
+    # --- Passo 2: Aplicar emotes ---
     for code, emoji in EMOTICONS_MAP.items():
-        result = result.replace(code, emoji)
-    return result
+        if code.startswith('[') and code.endswith(']'):
+            # Emotes com colchetes: substituição literal simples (já são delimitados)
+            protected = protected.replace(code, emoji)
+        else:
+            # Emotes alfanuméricos: usa word boundary para não afetar substrings
+            # (?<!\w) e (?!\w) garantem que só substitui palavras isoladas,
+            # mesmo quando o código começa ou termina com caractere não-letra
+            pattern = r'(?<!\w)' + re.escape(code) + r'(?!\w)'
+            protected = re.sub(pattern, emoji, protected)
+
+    # --- Passo 3: Restaurar URLs ---
+    for i, url in enumerate(urls):
+        protected = protected.replace(f"\x00URL{i}\x00", url)
+
+    return protected
 
 def get_emoticons():
     """Retorna o dicionário completo de emoticons"""

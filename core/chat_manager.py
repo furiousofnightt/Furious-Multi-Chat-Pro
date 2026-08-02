@@ -26,6 +26,7 @@ class AsyncManager(threading.Thread):
 
 class ChatManager(QObject):
     status_changed = pyqtSignal(str, bool)
+    platform_stats_updated = pyqtSignal(str, int, int, int, int) # platform, viewers, uptime, likes, total_views
 
     def __init__(self, settings, window):
         super().__init__()
@@ -41,9 +42,14 @@ class ChatManager(QObject):
         
         # Estado de conexão
         self.statuses = {"twitch": False, "tiktok": False, "kick": False}
+        # Viewers por plataforma (para tooltip)
+        self._platform_viewers = {"twitch": 0, "tiktok": 0, "kick": 0}
         
         # Conectar sinal de comandos da UI
         self.window.command_executed.connect(self.handle_command)
+        
+        # Conectar sinal de stats para garantir execução na thread da GUI
+        self.platform_stats_updated.connect(self._on_platform_stats)
 
     def handle_command(self, cmd):
         lang = self.settings.settings.get("language", "pt-br")
@@ -74,8 +80,8 @@ class ChatManager(QObject):
             h.message_received.connect(self.on_message_received)
             h.user_joined.connect(self.window.add_user_joined)
             h.status_changed.connect(lambda connected: self.update_status("twitch", connected))
-            h.stats_updated.connect(self.window.update_live_stats)
-            self.update_status("twitch", False) # Status inicial: vermelho (tentando)
+            h.stats_updated.connect(lambda v, u, l, t: self.platform_stats_updated.emit("twitch", v, u, l, t))
+            self.update_status("twitch", False)
             h.start()
             self.handlers.append(h)
 
@@ -87,9 +93,8 @@ class ChatManager(QObject):
             h.message_received.connect(self.on_message_received)
             h.user_joined.connect(self.window.add_user_joined)
             h.status_changed.connect(lambda connected: self.update_status("tiktok", connected))
-            h.stats_updated.connect(self.window.update_live_stats)
-            self.update_status("tiktok", False) # Status inicial: vermelho (tentando)
-            # Executado na thread principal, o handler se encarrega de jogar pro loop
+            h.stats_updated.connect(lambda v, u, l, t: self.platform_stats_updated.emit("tiktok", v, u, l, t))
+            self.update_status("tiktok", False)
             h.start_with_loop(self.async_manager.loop)
             self.handlers.append(h)
 
@@ -99,7 +104,7 @@ class ChatManager(QObject):
             h.message_received.connect(self.on_message_received)
             h.user_joined.connect(self.window.add_user_joined)
             h.status_changed.connect(lambda connected: self.update_status("kick", connected))
-            h.stats_updated.connect(self.window.update_live_stats)
+            h.stats_updated.connect(lambda v, u, l, t: self.platform_stats_updated.emit("kick", v, u, l, t))
             self.update_status("kick", False)
             h.start_with_loop(self.async_manager.loop)
             self.handlers.append(h)
@@ -107,9 +112,51 @@ class ChatManager(QObject):
     def update_status(self, platform, connected):
         self.statuses[platform] = connected
         self.status_changed.emit(platform, connected)
+        self.window.update_secondary_viewers(self._platform_viewers.copy(), self.statuses.copy())
+
+    def _resolve_viewer_value(self, platform, viewers):
+        """Evita que valores temporários 0 do TikTok derrubem o tooltip e o contador."""
+        try:
+            viewers = int(viewers)
+        except Exception:
+            viewers = 0
+
+        if platform == "tiktok" and viewers == 0 and self.statuses.get(platform, False):
+            previous = self._platform_viewers.get(platform, 0)
+            if previous > 0:
+                return previous
+
+        return viewers
+
+    def _on_platform_stats(self, platform, viewers, uptime_seconds, likes, total_views=0):
+        """
+        Centraliza os stats de todas as plataformas.
+        - TikTok é o primário: uptime + likes só vem do TikTok.
+        - Viewers de Twitch/Kick são armazenados e exibidos no tooltip.
+        """
+        effective_viewers = self._resolve_viewer_value(platform, viewers)
+        print(f"[DEBUG STATS] platform={platform} viewers={viewers} effective_viewers={effective_viewers} uptime={uptime_seconds} likes={likes}")
+
+        # Armazena e notifica a UI, preservando o último valor válido do TikTok quando ele manda 0 temporariamente.
+        self._platform_viewers[platform] = effective_viewers
+        self.window.update_secondary_viewers(self._platform_viewers.copy(), self.statuses.copy())
+
+        # Somente TikTok alimenta o painel principal de stats (uptime + likes)
+        if platform == "tiktok":
+            self.window.update_live_stats(effective_viewers, uptime_seconds, likes, total_views)
+        elif platform in ("twitch", "kick"):
+            # Twitch/Kick: só passa viewers para o display principal
+            # se o TikTok não estiver conectado (fallback)
+            if not self.statuses.get("tiktok", False):
+                self.window.update_live_stats(effective_viewers, uptime_seconds, likes, total_views)
 
     def filter_message(self, message):
-        """ Filtra palavras da blacklist substituindo por asteriscos """
+        """
+        Filtra palavras da blacklist substituindo por asteriscos.
+        Usa word boundaries que respeitam acentuação para evitar censurar
+        substrings dentro de palavras normais (ex: 'anal' na blacklist não
+        deve censurar a palavra 'canal').
+        """
         blacklist = self.settings.settings.get("blacklist", [])
         if not blacklist:
             return message
@@ -117,9 +164,11 @@ class ChatManager(QObject):
         filtered_message = message
         import re
         for word in blacklist:
-            # Filtro case-insensitive que preserva pontuação ao redor
-            pattern = re.compile(re.escape(word), re.IGNORECASE)
-            filtered_message = pattern.sub("*****", filtered_message)
+            # Lookarounds negativos: o caractere antes e depois não pode ser
+            # alfanumérico nem acentuado. Isso garante apenas palavras isoladas.
+            boundary = r'(?<![A-Za-zÀ-ÿ0-9_])' + re.escape(word) + r'(?![A-Za-zÀ-ÿ0-9_])'
+            pattern = re.compile(boundary, re.IGNORECASE)
+            filtered_message = pattern.sub("*" * len(word), filtered_message)
             
         return filtered_message
 
@@ -157,6 +206,52 @@ class ChatManager(QObject):
         # Parar apenas os handlers, manter o loop vivo
         self.stop_all(total_stop=False)
         QTimer.singleShot(1000, self.start_all)
+
+    def restart_platform(self, platform):
+        # Parar handler existente dessa plataforma
+        for h in list(self.handlers):
+            if getattr(h, "platform", "") == platform:
+                try:
+                    h.stop()
+                except Exception as e:
+                    print(f"⚠️ Erro ao parar handler {platform}: {e}")
+                self.handlers.remove(h)
+        
+        self.update_status(platform, False)
+        
+        lang = self.settings.settings.get("language", "pt-br")
+        username = self.settings.settings.get(platform)
+        if not username:
+            return
+            
+        if platform == "twitch":
+            h = TwitchHandler(username)
+            h.set_language(lang)
+            h.message_received.connect(self.on_message_received)
+            h.user_joined.connect(self.window.add_user_joined)
+            h.status_changed.connect(lambda connected: self.update_status("twitch", connected))
+            h.stats_updated.connect(lambda v, u, l, t: self.platform_stats_updated.emit("twitch", v, u, l, t))
+            h.start()
+            self.handlers.append(h)
+        elif platform == "tiktok":
+            h = TikTokHandler(username)
+            h.set_language(lang)
+            h.message_received.connect(self.on_message_received)
+            h.user_joined.connect(self.window.add_user_joined)
+            h.status_changed.connect(lambda connected: self.update_status("tiktok", connected))
+            h.stats_updated.connect(lambda v, u, l, t: self.platform_stats_updated.emit("tiktok", v, u, l, t))
+            h.start_with_loop(self.async_manager.loop)
+            self.handlers.append(h)
+        elif platform == "kick":
+            h = KickHandler(username)
+            h.set_language(lang)
+            h.message_received.connect(self.on_message_received)
+            h.user_joined.connect(self.window.add_user_joined)
+            h.status_changed.connect(lambda connected: self.update_status("kick", connected))
+            h.stats_updated.connect(lambda v, u, l, t: self.platform_stats_updated.emit("kick", v, u, l, t))
+            h.start_with_loop(self.async_manager.loop)
+            self.handlers.append(h)
+
 
     def stop_all(self, total_stop=True):
         # Parar todos os handlers (Twitch/TikTok/Kick)

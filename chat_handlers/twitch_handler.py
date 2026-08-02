@@ -1,6 +1,7 @@
 import socket
 import threading
 import time
+import httpx
 from .base_handler import BaseChatHandler
 from utils.emoticons import convert_emoticons, get_emote_url, resolve_7tv_emote
 from utils.translations import get_translation
@@ -19,6 +20,47 @@ class TwitchHandler(BaseChatHandler):
         self.is_running = True
         self.thread = threading.Thread(target=self._run_irc, daemon=True)
         self.thread.start()
+        # Thread paralela de polling de viewers (a cada 60s via GQL)
+        self._viewers_thread = threading.Thread(target=self._poll_viewers, daemon=True)
+        self._viewers_thread.start()
+
+    def _poll_viewers(self):
+        """Faz polling do viewer count da Twitch via GQL público a cada 60 segundos."""
+        channel = self.username.lower().replace('#', '')
+        query = """
+        query StreamInfo($login: String!) {
+          user(login: $login) {
+            stream { viewersCount }
+          }
+        }
+        """
+        headers = {
+            "Client-Id": "kimne78kx3ncx6brgo4mv6wki5h1ko",
+            "Content-Type": "application/json",
+        }
+        # Aguarda 5s para a conexão IRC estabelecer antes do primeiro poll
+        time.sleep(5)
+        while self.is_running:
+            try:
+                with httpx.Client(timeout=10.0) as client:
+                    resp = client.post(
+                        "https://gql.twitch.tv/gql",
+                        json=[{"query": query, "variables": {"login": channel}}],
+                        headers=headers
+                    )
+                    if resp.status_code == 200:
+                        data = resp.json()
+                        stream = data[0].get("data", {}).get("user", {}).get("stream") or {}
+                        viewers = stream.get("viewersCount", 0) if stream else 0
+                        # Emite viewers reais mantendo uptime/likes como 0 (não afeta outros campos)
+                        self.stats_updated.emit(viewers, 0, 0, 0)
+            except Exception as e:
+                print(f"[Twitch] Erro ao buscar viewers: {e}")
+            # Polling a cada 30 segundos (bom equilíbrio sem risco de rate limit)
+            for _ in range(30):
+                if not self.is_running:
+                    break
+                time.sleep(1)
 
     def _run_irc(self):
         while self.is_running:
@@ -38,7 +80,7 @@ class TwitchHandler(BaseChatHandler):
                 msg = get_translation("twitch_connected", self.language, channel)
                 self.message_received.emit(get_translation("twitch_connect_attempt", self.language), msg, "system")
                 self.status_changed.emit(True)
-                self.stats_updated.emit(0, 0, 0) # Dispara Failsafe pro Cronômetro Genérico
+                self.stats_updated.emit(0, 0, 0, 0) # Dispara Failsafe pro Cronômetro Genérico
                 
                 # Buffer para acumular dados e processar apenas linhas completas (\r\n)
                 # Resolve o problema de fragmentação de metadados no chat

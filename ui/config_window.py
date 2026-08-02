@@ -210,6 +210,7 @@ class ConfigWindow(QDialog):
         self._add_config_field_to("tiktok", get_translation("tiktok_label", lang), left_layout)
         self._add_config_field_to("kick",   get_translation("kick_label", lang),   left_layout)
 
+
         sep1 = QFrame(); sep1.setFrameShape(QFrame.Shape.HLine); sep1.setStyleSheet("color: #333; margin: 6px 0;")
         left_layout.addWidget(sep1)
         section_label("Geral", left_layout, "settings.svg")
@@ -415,6 +416,21 @@ class ConfigWindow(QDialog):
         hk2.addWidget(self.hotkey_clear_field)
         right_layout.addLayout(hk2)
 
+        sep4 = QFrame(); sep4.setFrameShape(QFrame.Shape.HLine); sep4.setStyleSheet("color: #333; margin: 6px 0;")
+        right_layout.addWidget(sep4)
+
+        # Botão de Login do TikTok (para lives +18)
+        self.tiktok_session_id = self.settings_manager.settings.get("tiktok_session_id", "")
+        tiktok_login_row = QHBoxLayout()
+        self.tiktok_login_status_lbl = QLabel()
+        self.tiktok_login_btn = QPushButton()
+        self._update_tiktok_login_ui()
+        self.tiktok_login_btn.clicked.connect(self._handle_tiktok_login_click)
+        tiktok_login_row.addWidget(self.tiktok_login_status_lbl)
+        tiktok_login_row.addStretch()
+        tiktok_login_row.addWidget(self.tiktok_login_btn)
+        right_layout.addLayout(tiktok_login_row)
+
         right_layout.addStretch()
         panels_layout.addWidget(right_panel, 1)
         self.layout.addLayout(panels_layout)
@@ -431,6 +447,89 @@ class ConfigWindow(QDialog):
         self.layout.addWidget(self.quit_app_btn)
 
 
+
+    def _update_tiktok_login_ui(self):
+        """Atualiza o visual do botão e label de acordo com o estado de login."""
+        if self.tiktok_session_id:
+            self.tiktok_login_status_lbl.setText("TikTok: Conectado")
+            self.tiktok_login_status_lbl.setStyleSheet("color: #00cc66; font-size: 10px; font-weight: bold;")
+            self.tiktok_login_btn.setText("Conectado")
+            self.tiktok_login_btn.setStyleSheet("""
+                QPushButton {
+                    background-color: #1a7a45;
+                    color: #aaffcc; font-weight: bold;
+                    border-radius: 5px; padding: 6px 12px;
+                    font-size: 11px; border: 1px solid #00cc66;
+                }
+                QPushButton:hover { background-color: #c0392b; color: white; }
+            """)
+        else:
+            self.tiktok_login_status_lbl.setText("TikTok: Nao conectado")
+            self.tiktok_login_status_lbl.setStyleSheet("color: #ff8888; font-size: 10px;")
+            self.tiktok_login_btn.setText("Fazer Login no TikTok")
+            self.tiktok_login_btn.setStyleSheet("""
+                QPushButton {
+                    background-color: #fe2c55;
+                    color: white; font-weight: bold;
+                    border-radius: 5px; padding: 6px 12px;
+                    font-size: 11px;
+                }
+                QPushButton:hover { background-color: #ff5577; }
+            """)
+
+    def _handle_tiktok_login_click(self):
+        """Gerencia o clique no botão: se já conectado, pergunta se quer desconectar."""
+        if self.tiktok_session_id:
+            reply = QMessageBox.question(
+                self,
+                "Desconectar do TikTok?",
+                "Você já está conectado.\n\nDeseja remover a conta e desconectar?\n(Lives +18 perderão o horario real)",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No
+            )
+            if reply == QMessageBox.StandardButton.Yes:
+                self.tiktok_session_id = ""
+                self.settings_manager.settings["tiktok_session_id"] = ""
+                self.settings_manager.save_settings()
+                self._update_tiktok_login_ui()
+        else:
+            self._open_tiktok_login()
+
+    def _open_tiktok_login(self):
+        """Mostra aviso e abre o mini-navegador para o usuário fazer login no TikTok."""
+        msg_box = QMessageBox(self)
+        msg_box.setWindowTitle("Por que fazer login no TikTok?")
+        msg_box.setIcon(QMessageBox.Icon.Information)
+        msg_box.setText(
+            "<b>O login no TikTok é opcional.</b><br><br>"
+            "Ele é necessário <b>apenas</b> se você quiser que o cronômetro mostre o tempo total da live "
+            "em transmissões com restrição de idade (+18) ou caso você conecte atrasado.<br><br>"
+            "Sem o login, o relógio do chat começará sempre do <b>00:00:00</b> no momento em que você conectar.<br><br>"
+            "<b>Recomendado:</b> use uma conta secundária do TikTok para login, nunca a conta principal.<br><br>"
+            "<i>🔒 <b>Sua Privacidade:</b> Não salvamos sua senha. Os dados de login ficam apenas neste computador, em um arquivo local.</i>"
+        )
+        btn_continuar = msg_box.addButton("Continuar", QMessageBox.ButtonRole.AcceptRole)
+        btn_cancelar = msg_box.addButton("Cancelar", QMessageBox.ButtonRole.RejectRole)
+        
+        msg_box.exec()
+        
+        if msg_box.clickedButton() == btn_continuar:
+            try:
+                from ui.tiktok_login_dialog import TikTokLoginDialog
+                dialog = TikTokLoginDialog(self)
+                dialog.login_success.connect(self._on_tiktok_login_success)
+                dialog.exec()
+            except ImportError as e:
+                QMessageBox.warning(self, "Erro", f"PyQt6-WebEngine nao esta instalado.\nInstale com: pip install PyQt6-WebEngine\n\n{e}")
+
+    def _on_tiktok_login_success(self, session_id):
+        """Chamado quando o login é detectado — salva o sessionid imediatamente."""
+        self.tiktok_session_id = session_id
+        self.settings_manager.settings["tiktok_session_id"] = session_id
+        
+        self.settings_manager.save_settings()
+        self._update_tiktok_login_ui()
+        QMessageBox.information(self, "Sucesso!", "Login no TikTok realizado com sucesso!\nSuas lives +18 agora vao mostrar o horario real.", QMessageBox.StandardButton.Ok)
 
     def confirm_quit(self):
         lang = self.settings_manager.settings.get("language", "pt-br")
@@ -450,6 +549,25 @@ class ConfigWindow(QDialog):
         line_edit.setText(self.settings_manager.settings.get(key, ""))
         setattr(self, f"{key}_input", line_edit)
         
+        # Botão de reconectar
+        reconnect_btn = QPushButton()
+        reconnect_icon_path = resource_path("assets/reconnect.svg")
+        reconnect_btn.setIcon(QIcon(reconnect_icon_path))
+        reconnect_btn.setToolTip(f"Reconectar {label_text}")
+        reconnect_btn.setFixedSize(22, 22)
+        reconnect_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        reconnect_btn.setStyleSheet("""
+            QPushButton { 
+                background-color: transparent; 
+                border: none;
+                border-radius: 4px;
+            }
+            QPushButton:hover { 
+                background-color: #333; 
+            }
+        """)
+        reconnect_btn.clicked.connect(lambda checked, p=key: self._reconnect_platform(p))
+        
         # LED de Status (CSS)
         status_led = QFrame()
         status_led.setFixedSize(12, 12)
@@ -459,6 +577,7 @@ class ConfigWindow(QDialog):
         
         h_layout.addWidget(label)
         h_layout.addWidget(line_edit)
+        h_layout.addWidget(reconnect_btn)
         h_layout.addWidget(status_led)
         target_layout.addLayout(h_layout)
         
@@ -468,6 +587,15 @@ class ConfigWindow(QDialog):
                 status_led.setStyleSheet("background-color: #00ff00; border-radius: 6px; border: 1px solid #00aa00;")
             else:
                 status_led.setStyleSheet("background-color: #ff0000; border-radius: 6px; border: 1px solid #aa0000;")
+
+    def _reconnect_platform(self, platform):
+        # Salvar as configs atuais do input para garantir que vai conectar com o username digitado
+        username_input = getattr(self, f"{platform}_input").text().strip()
+        self.settings_manager.settings[platform] = username_input
+        self.settings_manager.save_settings()
+        
+        if self.chat_manager:
+            self.chat_manager.restart_platform(platform)
 
     def update_platform_status(self, platform, connected):
         if platform in self.status_labels:

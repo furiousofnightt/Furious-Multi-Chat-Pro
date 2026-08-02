@@ -28,11 +28,12 @@ def build_exe():
     params = [
         main_script,
         f'--name={app_name}',
-        '--onefile',         # Um único executável
+        '--onedir',          # Formato de pasta (abertura instantânea)
         '--clean',           # Limpar cache do build
         '--noconfirm',       # Sobrescrever sem perguntar
         console_flag,        # Console ou Windowed
         '--icon=assets/icone.ico',
+        # '--uac-admin',  # Removido: causa lentidão no startup (prompt UAC + el evação)
         
         # Dependências Ocultas
         '--hidden-import=httpx',
@@ -51,7 +52,13 @@ def build_exe():
         '--hidden-import=edge_tts',
         '--hidden-import=pygame',
         '--hidden-import=curl_cffi',
-        '--uac-admin',                      # Força modo Administrador no .exe
+        '--hidden-import=PyQt6.QtWebEngineWidgets',
+        '--hidden-import=PyQt6.QtWebEngineCore',
+        '--hidden-import=win32crypt',
+
+        # Inclui as DLLs e recursos do WebEngine no executável
+        '--collect-all=PyQt6.QtWebEngineWidgets',
+        '--collect-all=PyQt6.QtWebEngineCore',
 
         # Incluir pastas externas (Dados)
         '--add-data=ui;ui',
@@ -60,8 +67,24 @@ def build_exe():
         '--add-data=utils;utils',
         '--add-data=assets;assets',
         
-        # Otimizações
-        '--noupx',                          # UPX às vezes quebra algumas DLLs de rede
+        # Otimizações de startup — excluir apenas módulos confirmados como não usados
+        '--noupx',           # UPX quebra algumas DLLs de rede
+        '--exclude-module=tkinter',
+        '--exclude-module=_tkinter',
+        '--exclude-module=matplotlib',
+        '--exclude-module=numpy',
+        '--exclude-module=scipy',
+        '--exclude-module=PIL',
+        '--exclude-module=unittest',
+        '--exclude-module=pydoc',
+        '--exclude-module=doctest',
+        '--exclude-module=difflib',
+        '--exclude-module=ftplib',
+        '--exclude-module=imaplib',
+        '--exclude-module=poplib',
+        '--exclude-module=smtplib',
+        '--exclude-module=telnetlib',
+        '--exclude-module=xmlrpc',
     ]
     
     PyInstaller.__main__.run(params)
