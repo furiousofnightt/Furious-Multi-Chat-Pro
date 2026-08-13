@@ -43,8 +43,10 @@ except Exception as _patch_exc:
     print(f"⚠️ TikTokLive websocket URI patch not applied: {_patch_exc}")
 
 from .base_handler import BaseChatHandler
-from utils.emoticons import convert_emoticons
+from utils.emoticons import convert_emoticons, get_emote_url
 from utils.translations import get_translation
+from utils.resource_path import resource_path
+from TikTokLive.proto.custom_proto import ExtendedUser
 import asyncio
 import base64
 import httpx
@@ -62,11 +64,13 @@ class TikTokHandler(BaseChatHandler):
         self._msg_history = []
         self._rate_limited = False
         self._connected_event = None
+        self._avatar_b64_cache = {}  # {user_id: "<img ...>"} — persiste entre reconexões
 
     def start_with_loop(self, loop):
         self.loop = loop
         self.is_running = True
-        async def run_tiktok():
+        self._reconnect_attempts = 0
+        async def run_tiktok_once():
             try:
                 # Lê o sessionid salvo nas configurações (via login do mini-navegador)
                 from core.settings_manager import SettingsManager
@@ -157,6 +161,122 @@ class TikTokHandler(BaseChatHandler):
                     except Exception:
                         pass
                     return ''
+
+                async def _get_avatar_b64(user_obj) -> str:
+                    """Retorna tag <img> com avatar Base64 do usuário. Cache por user_id."""
+                    try:
+                        user_id = str(getattr(user_obj, 'id', '') or '')
+                        if not user_id:
+                            return ''
+                        # Sentinel: None = download em andamento, '' = falhou, '<img>' = ok
+                        cached = self._avatar_b64_cache.get(user_id, 'NOT_FOUND')
+                        if cached != 'NOT_FOUND':
+                            return cached or ''
+                        # Marca como em andamento antes de qualquer await
+                        self._avatar_b64_cache[user_id] = None
+                        avatar_url = None
+                        avatar_thumb = getattr(user_obj, 'avatar_thumb', None)
+                        if avatar_thumb:
+                            url_list = getattr(avatar_thumb, 'url_list', None)
+                            if url_list and len(url_list) > 0:
+                                avatar_url = url_list[0]
+                        if not avatar_url:
+                            self._avatar_b64_cache[user_id] = ''
+                            return ''
+                        headers = {"User-Agent": "Mozilla/5.0", "Referer": "https://www.tiktok.com/"}
+                        async with httpx.AsyncClient(timeout=5.0, headers=headers) as hc:
+                            resp = await hc.get(avatar_url)
+                            if resp.status_code == 200 and resp.content:
+                                b64 = base64.b64encode(resp.content).decode()
+                                ct = resp.headers.get("content-type", "image/jpeg")
+                                tag = (f"<img src='data:{ct};base64,{b64}' "
+                                       f"width='22' height='22' "
+                                       f"style='border-radius:50%;vertical-align:middle;margin-right:3px;'>")
+                                self._avatar_b64_cache[user_id] = tag
+                                # Limpar cache se ficar grande demais (~500 avatares)
+                                if len(self._avatar_b64_cache) > 500:
+                                    keys = list(self._avatar_b64_cache.keys())
+                                    for k in keys[:250]:
+                                        del self._avatar_b64_cache[k]
+                                return tag
+                        # Download falhou
+                        self._avatar_b64_cache[user_id] = ''
+                    except Exception:
+                        # Garante que o sentinel None nunca fica preso em caso de erro
+                        try:
+                            user_id2 = str(getattr(user_obj, 'id', '') or '')
+                            if user_id2 and self._avatar_b64_cache.get(user_id2) is None:
+                                self._avatar_b64_cache[user_id2] = ''
+                        except Exception:
+                            pass
+                    return ''
+
+                def _get_badge_str(user_obj) -> str:
+                    """Retorna HTML com badges TikTok como <img> de SVG local. Nunca levanta exceção."""
+                    badges = ''
+                    try:
+                        def badge_img(svg_name):
+                            path = resource_path(f'assets/{svg_name}').replace('\\', '/')
+                            return (f" <img src='file:///{path}' "
+                                    f"width='16' height='16' "
+                                    f"style='vertical-align:middle;margin-left:2px;'>")
+                        
+                        is_mod = False
+                        is_top_gifter = False
+                        is_fan = False
+                        is_host = False
+                        is_sub = False
+                        is_friend = False
+                        is_pro = False
+                        
+                        # Fix for TikTokLive v6 bug: 'badges' vs 'badge_list'
+                        badge_list = getattr(user_obj, 'badge_list', []) or []
+                        if not badge_list:
+                            # Fallback para versões antigas
+                            badge_list = getattr(user_obj, 'badges', []) or []
+                            
+                        for b in badge_list:
+                            try:
+                                scene_name = str(getattr(getattr(b, 'scene_type', None), 'name', '') or '').upper()
+                                scene_value = getattr(getattr(b, 'scene_type', None), 'value', -1)
+                                if scene_name == 'ADMIN' or scene_value == 1:
+                                    is_mod = True
+                                elif 'RANK_LIST' in scene_name or scene_value == 6:
+                                    is_top_gifter = True
+                                elif scene_name == 'FANS' or scene_value == 10:
+                                    is_fan = True
+                                elif scene_name == 'ANCHOR' or scene_value == 12:
+                                    is_host = True
+                                elif scene_name == 'SUBSCRIBER' or scene_name == 'NEW_SUBSCRIBER' or scene_value in (4, 7):
+                                    is_sub = True
+                                elif scene_name == 'FRIENDS' or scene_value == 3:
+                                    is_friend = True
+                                elif scene_name == 'LIVE_PRO' or scene_value == 11:
+                                    is_pro = True
+                            except Exception:
+                                pass
+
+                        if getattr(user_obj, 'verified', False):
+                            badges += badge_img('tiktok_verified.svg')
+                        if is_host:
+                            badges += badge_img('tiktok_host.svg')
+                        if is_mod or getattr(user_obj, 'is_moderator', False):
+                            badges += badge_img('tiktok_mod.svg')
+                        if is_pro:
+                            badges += badge_img('tiktok_live_pro.svg')
+                        if is_sub:
+                            badges += badge_img('tiktok_sub.svg')
+                        if is_top_gifter or getattr(user_obj, 'is_top_gifter', False):
+                            badges += badge_img('tiktok_top_gifter.svg')
+                        if is_friend:
+                            badges += badge_img('tiktok_friend.svg')
+                        
+                        member_lvl = getattr(user_obj, 'member_level', None)
+                        if is_fan or (member_lvl and str(member_lvl).isdigit() and int(member_lvl) > 0):
+                            badges += badge_img('tiktok_fan.svg')
+                    except Exception:
+                        pass
+                    return badges
 
                 async def _sync_uptime_background():
                     """Busca uptime em background sem bloquear o event loop de mensagens."""
@@ -250,9 +370,9 @@ class TikTokHandler(BaseChatHandler):
                     uptime_seconds = max(0, int(time.time()) - current_start)
                     self.stats_updated.emit(viewers, uptime_seconds, self._total_likes, getattr(self, '_total_views', 0))
 
-                def _emit_if_new(author, msg):
+                def _emit_if_new(author, msg, author_display=None):
                     now = time.time()
-                    msg_key = f"{author}::{msg}"
+                    msg_key = f"{author}::{msg}"  # chave de dedup usa sempre o nome puro
                     
                     if not hasattr(self, "_msg_history_dict"):
                         self._msg_history_dict = {}
@@ -268,36 +388,124 @@ class TikTokHandler(BaseChatHandler):
                     # Limpa o dicionário de tempos em tempos para não gastar memória RAM
                     if len(self._msg_history_dict) > 100:
                         self._msg_history_dict = {k: v for k, v in self._msg_history_dict.items() if now - v < 10.0}
-                        
-                    self.message_received.emit(author, msg, "tiktok")
+                    
+                    # author_display pode conter <img> de avatar/badges; author é sempre o nome puro
+                    emit_author = author_display if author_display is not None else author
+                    self.message_received.emit(emit_author, msg, "tiktok")
 
                 # FIX #1: on_comment blindado — nenhuma mensagem se perde silenciosamente
                 @self.client.on(CommentEvent)
                 async def on_comment(event: CommentEvent):
                     try:
-                        # Fallback de campos: comment → message → text (compatibilidade de versões)
                         raw = (getattr(event, 'comment', None)
                                or getattr(event, 'message', None)
                                or getattr(event, 'text', None)
                                or "")
-                        if not raw:
+                        
+                        has_emotes = bool(getattr(event, 'emotes', None))
+                        
+                        # Só descarta se não tiver texto E não tiver emotes customizados
+                        if not raw and not has_emotes:
                             return  # Mensagem genuinamente vazia
-                        msg = convert_emoticons(str(raw))
+                        
+                        raw = str(raw) if raw else ""
+                        
+                        # 🔥 Emojis Customizados do TikTok
+                        if getattr(event, 'emotes', None):
+                            try:
+                                emotes_to_process = []
+                                for e in event.emotes:
+                                    emote_obj = getattr(e, 'emote', None)
+                                    idx = getattr(e, 'index', -1)
+                                    if emote_obj and idx >= 0:
+                                        emotes_to_process.append((idx, emote_obj))
+                                
+                                # De trás pra frente para manter a validade dos índices
+                                emotes_to_process.sort(key=lambda x: x[0], reverse=True)
+                                
+                                for idx, emote_obj in emotes_to_process:
+                                    img_obj = getattr(emote_obj, 'image', None)
+                                    if not img_obj: continue
+                                    urls = getattr(img_obj, 'url_list', [])
+                                    if not urls: continue
+                                    
+                                    img_url = str(urls[0])
+                                    emote_id = str(getattr(emote_obj, 'emote_id', 'unknown'))
+                                    
+                                    # Roda de forma async (via thread do executor) para não bloquear o loop do TikTok
+                                    local_url = await asyncio.get_event_loop().run_in_executor(
+                                        None, get_emote_url, img_url, f"ttk_{emote_id}"
+                                    )
+                                    
+                                    if local_url:
+                                        img_tag = f"<img src='{local_url}' width='22' height='22' style='vertical-align: middle; margin: 0 1px;'>"
+                                        
+                                        # Se existe um placeholder [...] na posição indicada, nós o substituímos.
+                                        if idx < len(raw) and raw[idx] == '[':
+                                            end_idx = raw.find(']', idx)
+                                            if end_idx != -1:
+                                                raw = raw[:idx] + img_tag + raw[end_idx+1:]
+                                            else:
+                                                raw = raw[:idx] + img_tag + raw[idx:]
+                                        else:
+                                            # Fallback, insere na posição exata
+                                            raw = raw[:idx] + img_tag + raw[idx:]
+                            except Exception as em_e:
+                                print(f"⚠️ Erro ao processar emotes customizados do TikTok: {em_e}")
 
-                        # Fallback de usuário: user_info → user (compatibilidade de versões)
+                        msg = convert_emoticons(raw)
+
+                        # user / user_info contains the raw proto User
+                        user_obj = getattr(event, 'user', None) or getattr(event, 'user_info', None)
+
                         author = "Usuário"
                         try:
-                            ui = getattr(event, 'user_info', None) or getattr(event, 'user', None)
-                            if ui:
-                                author = (getattr(ui, 'nick_name', None)
-                                          or getattr(ui, 'nickname', None)
-                                          or getattr(ui, 'username', None)
+                            if user_obj:
+                                author = (getattr(user_obj, 'nick_name', None)
+                                          or getattr(user_obj, 'nickname', None)
+                                          or getattr(user_obj, 'username', None)
                                           or "Usuário")
                         except:
                             pass
 
+                        # Avatar: cache hit = instant; novo usuário = aguarda até 1s (asyncio.shield
+                        # não bloqueia outros eventos, apenas dá tempo ao CDN que é rápido)
+                        avatar_html = ''
+                        user_id = ''
+                        try:
+                            if user_obj:
+                                user_id = str(getattr(user_obj, 'id', '') or '')
+                                cached = self._avatar_b64_cache.get(user_id, 'NOT_FOUND') if user_id else ''
+                                if cached == 'NOT_FOUND':
+                                    # Primeiro contato com este usuário: inicia download e aguarda até 1s
+                                    task = asyncio.create_task(_get_avatar_b64(user_obj))
+                                    try:
+                                        await asyncio.wait_for(asyncio.shield(task), timeout=1.0)
+                                    except asyncio.TimeoutError:
+                                        pass  # CDN demorou; task continua, próxima msg terá avatar
+                                    avatar_html = self._avatar_b64_cache.get(user_id) or ''
+                                elif cached is None:
+                                    # Download já em andamento (outra msg deste usuário disparou antes)
+                                    avatar_html = ''
+                                else:
+                                    # Cache hit: '', '<img...>' etc
+                                    avatar_html = cached
+                        except Exception:
+                            pass
+
+                        # Badges usando parsing manual corrigido para TikTokLive v6
+                        badge_str = ''
+                        try:
+                            if user_obj:
+                                badge_str = _get_badge_str(user_obj)
+                        except Exception:
+                            pass
+
+                        # author_display: avatar + nome + badges (só se houver enriquecimento)
+                        author_display = f"{avatar_html}{author}{badge_str}" if (avatar_html or badge_str) else None
+
                         print(f"[TikTok] {author}: {msg[:50]}...", flush=True)
-                        _emit_if_new(author, msg)
+                        _emit_if_new(author, msg, author_display=author_display)
                     except Exception as e:
                         print(f"⚠️ on_comment erro: {e}")
 
@@ -596,6 +804,7 @@ class TikTokHandler(BaseChatHandler):
                 @self.client.on(ConnectEvent)
                 async def on_connect(event: ConnectEvent):
                     self._connected_event.set()
+                    self._reconnect_attempts = 0
                     self.status_changed.emit(True)
                     if not self._already_connected:
                         msg = get_translation("tiktok_connected", self.language, username=self.username)
@@ -683,7 +892,7 @@ class TikTokHandler(BaseChatHandler):
                     get_translation("tiktok_attempting", self.language, username=self.username),
                     "system"
                 )
-                loop_task = await self.client.start()
+                self._loop_task = await self.client.start()
                 try:
                     await asyncio.wait_for(self._connected_event.wait(), timeout=20.0)
                 except asyncio.TimeoutError:
@@ -696,7 +905,10 @@ class TikTokHandler(BaseChatHandler):
                         )
                     await self.client.disconnect()
                     return
-                await loop_task
+                try:
+                    await self._loop_task
+                except asyncio.CancelledError:
+                    pass
 
                 if self.is_running:
                     self.status_changed.emit(False)
@@ -720,6 +932,12 @@ class TikTokHandler(BaseChatHandler):
                         msg = get_translation("tiktok_rate_limited", self.language, username=self.username, error=str(e)[:100])
                         self.message_received.emit(get_translation("tiktok_connect_attempt", self.language), msg, "system")
                     self.is_running = False
+                elif "offline" in error_str or "not found" in error_str or "room_id" in error_str or "has ended" in error_str or "is over" in error_str:
+                    if self.is_running:
+                        self.status_changed.emit(False)
+                        msg = get_translation("tiktok_offline", self.language, username=self.username)
+                        self.message_received.emit(get_translation("tiktok_connect_attempt", self.language), msg, "system")
+                    self.is_running = False
                 elif self.is_running:
                     self.status_changed.emit(False)
                     msg = get_translation("tiktok_error", self.language, error=str(e))
@@ -727,13 +945,34 @@ class TikTokHandler(BaseChatHandler):
             finally:
                 self.client = None
 
+        async def run_tiktok():
+            while self.is_running:
+                await run_tiktok_once()
+                if self.is_running and not self._rate_limited:
+                    self._reconnect_attempts += 1
+                    if self._reconnect_attempts > 5:
+                        self.is_running = False
+                        self.status_changed.emit(False)
+                        msg = "Limite de 5 tentativas de reconexão atingido. Parando para evitar bloqueio."
+                        self.message_received.emit(get_translation("tiktok_connect_attempt", self.language), msg, "system")
+                        break
+                    await asyncio.sleep(5)
+
         asyncio.run_coroutine_threadsafe(run_tiktok(), self.loop)
 
     def stop(self):
         self.is_running = False
-        if self.client and self.loop:
+        if getattr(self, 'loop', None):
+            if getattr(self, '_loop_task', None) and not self._loop_task.done():
+                self.loop.call_soon_threadsafe(self._loop_task.cancel)
+        
+        if getattr(self, 'client', None) and self.loop:
             try:
-                asyncio.run_coroutine_threadsafe(self.client.disconnect(), self.loop)
+                if asyncio.iscoroutinefunction(self.client.disconnect):
+                    asyncio.run_coroutine_threadsafe(self.client.disconnect(), self.loop)
+                else:
+                    # Pode ser que client.disconnect não seja corotina em algumas versões do TikTokLive
+                    self.client.disconnect()
             except Exception as e:
                 print(f"⚠️ Erro ao parar TikTok: {e}")
 

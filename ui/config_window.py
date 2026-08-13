@@ -1,13 +1,24 @@
 from PyQt6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLineEdit, QPushButton, QLabel, QSlider, QComboBox, QCheckBox, QPlainTextEdit, QWidget, QFrame, QScrollArea, QMessageBox, QColorDialog
 from PyQt6.QtGui import QColor, QIcon, QFont, QKeySequence
-from PyQt6.QtCore import Qt, pyqtSignal, QSize
+from PyQt6.QtCore import Qt, pyqtSignal, QSize, QEvent, QObject
 from utils.translations import get_translation, get_available_languages, get_language_display_name
 from utils.resource_path import resource_path
 import os
 
 # Helper para recursos
 
+class _WheelIgnoreFilter(QObject):
+    """Ignora eventos de scroll do mouse em widgets dentro de QScrollArea.
+    Sem isso, QSlider e QComboBox dentro de um scroll roubam o scroll do painel.
+    """
+    def eventFilter(self, obj, event):
+        if event.type() == QEvent.Type.Wheel:
+            event.ignore()  # devolve o evento para o pai (o scroll area)
+            return True
+        return super().eventFilter(obj, event)
 
+# Instância global reutilizável (evita criar um objeto por widget)
+_wheel_ignore = _WheelIgnoreFilter()
 
 class HotkeyField(QLineEdit):
     """Campo que captura o atalho de teclado quando o usuário pressiona as teclas."""
@@ -138,8 +149,9 @@ class ConfigWindow(QDialog):
         lang = self.settings_manager.settings.get("language", "pt-br")
         
         self.setWindowTitle("Furious Config")
-        self.setFixedWidth(780)
-        self.setMinimumHeight(520)
+        self.setMinimumWidth(900)
+        self.setMinimumHeight(680)
+        self.resize(900, 700)
         self.layout = QVBoxLayout(self)
         self.layout.setContentsMargins(16, 16, 16, 16)
         self.layout.setSpacing(12)
@@ -179,12 +191,13 @@ class ConfigWindow(QDialog):
         panels_layout = QHBoxLayout()
         panels_layout.setSpacing(12)
 
-        # ── PAINEL ESQUERDO: Conexões + Geral ────────────────────────────────
-        left_panel = QFrame()
-        left_panel.setObjectName("panel")
-        left_layout = QVBoxLayout(left_panel)
-        left_layout.setContentsMargins(14, 14, 14, 14)
-        left_layout.setSpacing(6)
+        # ── PAINEL ESQUERDO: Conexões + Geral (com scroll para acomodar conteúdo) ─
+        # Conteúdo interno do painel esquerdo
+        left_content = QWidget()
+        left_content.setObjectName("left_content")
+        left_layout = QVBoxLayout(left_content)
+        left_layout.setContentsMargins(12, 12, 12, 12)
+        left_layout.setSpacing(5)
 
         def section_label(text, layout, icon_filename=None):
             container = QFrame()
@@ -209,6 +222,7 @@ class ConfigWindow(QDialog):
         self._add_config_field_to("twitch", get_translation("twitch_label", lang), left_layout)
         self._add_config_field_to("tiktok", get_translation("tiktok_label", lang), left_layout)
         self._add_config_field_to("kick",   get_translation("kick_label", lang),   left_layout)
+        self._add_config_field_to("youtube", get_translation("youtube_label", lang), left_layout)
 
 
         sep1 = QFrame(); sep1.setFrameShape(QFrame.Shape.HLine); sep1.setStyleSheet("color: #333; margin: 6px 0;")
@@ -222,6 +236,8 @@ class ConfigWindow(QDialog):
         left_layout.addWidget(QLabel(get_translation("opacity_label", lang)))
         op_row = QHBoxLayout()
         self.opacity_slider = QSlider(Qt.Orientation.Horizontal)
+        self.opacity_slider.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        self.opacity_slider.installEventFilter(_wheel_ignore)
         self.opacity_slider.setRange(20, 100)
         self.opacity_slider.setValue(int(self.settings_manager.settings.get("opacity", 0.85) * 100))
         self.opacity_val_label = QLabel(f"{self.opacity_slider.value()}%")
@@ -233,6 +249,8 @@ class ConfigWindow(QDialog):
         left_layout.addWidget(QLabel(get_translation("delay_label", lang)))
         dl_row = QHBoxLayout()
         self.delay_slider = QSlider(Qt.Orientation.Horizontal)
+        self.delay_slider.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        self.delay_slider.installEventFilter(_wheel_ignore)
         self.delay_slider.setRange(0, 50)
         current_delay = float(self.settings_manager.settings.get("message_delay", 0))
         self.delay_slider.setValue(int(current_delay * 10))
@@ -253,6 +271,8 @@ class ConfigWindow(QDialog):
         vol_row = QHBoxLayout()
         vol_row.addWidget(QLabel("Volume da Voz"))
         self.tts_volume_slider = QSlider(Qt.Orientation.Horizontal)
+        self.tts_volume_slider.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        self.tts_volume_slider.installEventFilter(_wheel_ignore)
         self.tts_volume_slider.setRange(0, 100)
         current_vol = self.settings_manager.settings.get("tts_volume", 100)
         self.tts_volume_slider.setValue(int(current_vol))
@@ -275,11 +295,13 @@ class ConfigWindow(QDialog):
             check_key = f"tts_enabled_{platform_name.lower()}"
             check = QCheckBox(platform_name)
             check.setChecked(self.settings_manager.settings.get(check_key, True))
-            check.setFixedWidth(65)
+            check.setFixedWidth(85)
             row.addWidget(check)
             setattr(self, f"check_{platform_name.lower()}", check)
             
             combo = QComboBox()
+            combo.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+            combo.installEventFilter(_wheel_ignore)
             for name, code in self.voices_list:
                 combo.addItem(name, code)
             
@@ -294,13 +316,17 @@ class ConfigWindow(QDialog):
         self.combo_twitch, row_tw = create_voice_combo("Twitch", "tts_voice_twitch", "pt-BR-AntonioNeural")
         self.combo_tiktok, row_tt = create_voice_combo("TikTok", "tts_voice_tiktok", "pt-BR-FranciscaNeural")
         self.combo_kick, row_kk = create_voice_combo("Kick", "tts_voice_kick", "pt-BR-ThalitaMultilingualNeural")
+        self.combo_youtube, row_yt = create_voice_combo("YouTube", "tts_voice_youtube", "pt-BR-AntonioNeural")
         
         left_layout.addLayout(row_tw)
         left_layout.addLayout(row_tt)
         left_layout.addLayout(row_kk)
+        left_layout.addLayout(row_yt)
 
         left_layout.addWidget(QLabel(get_translation("language_label", lang)))
         self.lang_combo = QComboBox()
+        self.lang_combo.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        self.lang_combo.installEventFilter(_wheel_ignore)
         self.lang_codes = get_available_languages()
         self.lang_combo.addItems([get_language_display_name(c) for c in self.lang_codes])
         current_index = self.lang_codes.index(lang) if lang in self.lang_codes else 0
@@ -308,7 +334,40 @@ class ConfigWindow(QDialog):
         left_layout.addWidget(self.lang_combo)
 
         left_layout.addStretch()
-        panels_layout.addWidget(left_panel, 1)
+        
+        # Scroll area que envolve o conteúdo esquerdo
+        left_scroll = QScrollArea()
+        left_scroll.setObjectName("panel")
+        left_scroll.setWidget(left_content)
+        left_scroll.setWidgetResizable(True)
+        left_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        left_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        left_scroll.setStyleSheet("""
+            QScrollArea#panel {
+                background-color: #242424;
+                border: 1px solid #333;
+                border-radius: 8px;
+            }
+            QWidget#left_content {
+                background-color: #242424;
+            }
+            QScrollBar:vertical {
+                background: #2e2e2e;
+                width: 6px;
+                border-radius: 3px;
+            }
+            QScrollBar::handle:vertical {
+                background: #555;
+                border-radius: 3px;
+            }
+            QScrollBar::handle:vertical:hover {
+                background: #007acc;
+            }
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+                height: 0px;
+            }
+        """)
+        panels_layout.addWidget(left_scroll, 1)
 
         # ── PAINEL DIREITO: Aparência + Blacklist + Hotkeys ──────────────────
         right_panel = QFrame()
@@ -347,7 +406,7 @@ class ConfigWindow(QDialog):
         right_layout.addLayout(sz_row)
 
         self.platform_colors = self.settings_manager.settings.get("platform_colors", {}).copy()
-        for platform in ["twitch", "tiktok", "kick"]:
+        for platform in ["twitch", "tiktok", "kick", "youtube"]:
             color_row = QHBoxLayout()
             color_row.addWidget(QLabel(get_translation(f"{platform}_color_label", lang)))
             color_row.addStretch()
@@ -394,12 +453,36 @@ class ConfigWindow(QDialog):
         hint.setStyleSheet("color: #777; font-size: 10px; font-weight: normal; margin-top: 0;")
         right_layout.addWidget(hint)
 
+        def create_info_btn(info_key):
+            btn = QPushButton("?")
+            btn.setFixedSize(20, 20)
+            btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            btn.setStyleSheet("""
+                QPushButton { 
+                    background: #555; color: white; font-weight: bold; 
+                    border-radius: 10px; border: none; 
+                    font-size: 13px; font-family: Arial, sans-serif;
+                    padding: 0px; margin: 0px; text-align: center;
+                }
+                QPushButton:hover { background: #007acc; }
+            """)
+            btn.setToolTip(get_translation(info_key, lang))
+            
+            def force_show_tooltip():
+                from PyQt6.QtWidgets import QToolTip
+                from PyQt6.QtGui import QCursor
+                QToolTip.showText(QCursor.pos(), btn.toolTip(), btn)
+                
+            btn.clicked.connect(force_show_tooltip)
+            return btn
+
         hk1 = QHBoxLayout()
         icon_hk1_path = resource_path("assets/show.svg")
         icon_lbl1 = QLabel()
         icon_lbl1.setPixmap(QIcon(icon_hk1_path).pixmap(14, 14))
         hk1.addWidget(icon_lbl1)
         hk1.addWidget(QLabel(get_translation("hotkey_toggle", lang)))
+        hk1.addWidget(create_info_btn("info_toggle"))
         self.hotkey_toggle_field = HotkeyField()
         self.hotkey_toggle_field.setText(self.settings_manager.settings.get("hotkey_toggle_visibility", "ctrl+shift+h"))
         hk1.addWidget(self.hotkey_toggle_field)
@@ -411,10 +494,24 @@ class ConfigWindow(QDialog):
         icon_lbl2.setPixmap(QIcon(icon_hk2_path).pixmap(14, 14))
         hk2.addWidget(icon_lbl2)
         hk2.addWidget(QLabel(get_translation("hotkey_clear", lang)))
+        hk2.addWidget(create_info_btn("info_clear"))
         self.hotkey_clear_field = HotkeyField()
         self.hotkey_clear_field.setText(self.settings_manager.settings.get("hotkey_clear_chat", "ctrl+shift+c"))
         hk2.addWidget(self.hotkey_clear_field)
         right_layout.addLayout(hk2)
+
+        hk3 = QHBoxLayout()
+        # You can use a mouse icon if available, else pin or show
+        icon_hk3_path = resource_path("assets/pin.svg") 
+        icon_lbl3 = QLabel()
+        icon_lbl3.setPixmap(QIcon(icon_hk3_path).pixmap(14, 14))
+        hk3.addWidget(icon_lbl3)
+        hk3.addWidget(QLabel(get_translation("hotkey_clickthrough", lang)))
+        hk3.addWidget(create_info_btn("info_clickthrough"))
+        self.hotkey_clickthrough_field = HotkeyField()
+        self.hotkey_clickthrough_field.setText(self.settings_manager.settings.get("hotkey_clickthrough", "ctrl+alt+t"))
+        hk3.addWidget(self.hotkey_clickthrough_field)
+        right_layout.addLayout(hk3)
 
         sep4 = QFrame(); sep4.setFrameShape(QFrame.Shape.HLine); sep4.setStyleSheet("color: #333; margin: 6px 0;")
         right_layout.addWidget(sep4)
@@ -545,7 +642,10 @@ class ConfigWindow(QDialog):
     def _add_config_field_to(self, key, label_text, target_layout):
         h_layout = QHBoxLayout()
         label = QLabel(label_text)
+        label.setMinimumWidth(120)
         line_edit = QLineEdit()
+        line_edit.setMinimumWidth(180)
+        line_edit.setSizePolicy(line_edit.sizePolicy().horizontalPolicy(), line_edit.sizePolicy().verticalPolicy())
         line_edit.setText(self.settings_manager.settings.get(key, ""))
         setattr(self, f"{key}_input", line_edit)
         
@@ -649,6 +749,7 @@ class ConfigWindow(QDialog):
         self.settings_manager.settings["twitch"] = self.twitch_input.text().strip()
         self.settings_manager.settings["tiktok"] = self.tiktok_input.text().strip()
         self.settings_manager.settings["kick"] = self.kick_input.text().strip()
+        self.settings_manager.settings["youtube"] = self.youtube_input.text().strip()
         
         self.settings_manager.settings["opacity"] = self.opacity_slider.value() / 100.0
         self.settings_manager.settings["glassmorphism"] = self.glass_check.isChecked()
@@ -660,10 +761,12 @@ class ConfigWindow(QDialog):
         self.settings_manager.settings["tts_enabled_twitch"] = self.check_twitch.isChecked()
         self.settings_manager.settings["tts_enabled_tiktok"] = self.check_tiktok.isChecked()
         self.settings_manager.settings["tts_enabled_kick"] = self.check_kick.isChecked()
+        self.settings_manager.settings["tts_enabled_youtube"] = self.check_youtube.isChecked()
         
         self.settings_manager.settings["tts_voice_twitch"] = self.combo_twitch.currentData()
         self.settings_manager.settings["tts_voice_tiktok"] = self.combo_tiktok.currentData()
         self.settings_manager.settings["tts_voice_kick"] = self.combo_kick.currentData()
+        self.settings_manager.settings["tts_voice_youtube"] = self.combo_youtube.currentData()
         
         current_lang_index = self.lang_combo.currentIndex()
         self.settings_manager.settings["language"] = self.lang_codes[current_lang_index] if current_lang_index < len(self.lang_codes) else "pt-br"
@@ -677,6 +780,7 @@ class ConfigWindow(QDialog):
         # Salva hotkeys
         self.settings_manager.settings["hotkey_toggle_visibility"] = self.hotkey_toggle_field.text().strip() or "ctrl+shift+h"
         self.settings_manager.settings["hotkey_clear_chat"] = self.hotkey_clear_field.text().strip() or "ctrl+shift+c"
+        self.settings_manager.settings["hotkey_clickthrough"] = self.hotkey_clickthrough_field.text().strip() or "ctrl+alt+t"
         
         self.settings_manager.save_settings()
         

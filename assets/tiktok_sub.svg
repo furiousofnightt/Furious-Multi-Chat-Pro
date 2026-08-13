@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="18" height="18">
+    <rect width="512" height="512" rx="128" fill="#FCE200"/>
+    <!-- Centered Star -->
+    <path fill="#FF6B00" d="M256 64 l51 157h165l-133 97 51 157-134-97-134 97 51-157-133-97h165z" />
+</svg>

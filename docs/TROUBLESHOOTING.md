@@ -84,7 +84,17 @@ nslookup twitch.tv
 
 ---
 
-## Problemas de Interface
+### YouTube: Chat conecta, mas visualizações ficam presas em 0
+
+**Causas comuns**:
+O YouTube muda regularmente a maneira como exibe o número de visualizações na tela, o que faz a captura das visualizações via HTML ser frágil. 
+
+**Solução (Interna)**:
+A aplicação agora possui 3 métodos diferentes para tentar extrair e exibir os viewers: `runs`, `simpleText` ou `concurrentViewers`. Caso o app pare de contar os views permanentemente, significa que o YouTube alterou todo o HTML estrutural. Neste caso, o desenvolvedor precisa analisar o source da página e adaptar o `youtube_handler.py`.
+
+---
+
+---
 
 ### Janela não aparece / Invisível
 
@@ -94,6 +104,16 @@ nslookup twitch.tv
 1. Pressionar **Ctrl+Shift+H** (toggle visibilidade)
 2. Deletar `settings.json` para resetar posição/opacidade
 3. Verificar se não está minimizado no tray (ícone na barra do sistema)
+
+---
+
+### Viewers continuam na tela após desconectar a plataforma (Viewers Fantasmas)
+
+**Causa (Resolvida)**:
+Anteriormente, o reset granular dos chats na página de configurações não estava resetando a última contagem enviada pela plataforma. Se o YouTube ou Kick era desabilitado nas configurações, a contagem na tela não baixava para 0.
+
+**Solução**: 
+Esta questão foi consertada a nível de código no `chat_manager.py` durante o fechamento dinâmico (no método `restart_platform()`). Agora, remover o nome e clicar em salvar zera obrigatoriamente os viewers dessa plataforma para evitar vestígios.
 
 ---
 

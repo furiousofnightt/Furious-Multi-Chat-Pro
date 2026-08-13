@@ -49,6 +49,7 @@ class SettingsManager:
             "twitch": "",
             "tiktok": "",
             "kick": "",
+            "youtube": "",
             "language": "pt-br",
             "opacity": 0.85,
             "theme": "dark",
@@ -60,6 +61,7 @@ class SettingsManager:
                 "twitch": "#9146FF",
                 "tiktok": "#FF0050",
                 "kick": "#53FC18",
+                "youtube": "#FF0000",
                 "system": "#333333"
             }
         }

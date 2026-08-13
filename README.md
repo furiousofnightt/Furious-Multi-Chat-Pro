@@ -5,6 +5,7 @@
     <img src="https://img.shields.io/badge/Twitch-9146FF?style=for-the-badge&logo=twitch&logoColor=white" alt="Twitch" />
     <img src="https://img.shields.io/badge/TikTok-000000?style=for-the-badge&logo=tiktok&logoColor=white" alt="TikTok" />
     <img src="https://img.shields.io/badge/Kick-53FC18?style=for-the-badge&logo=kick&logoColor=black" alt="Kick" />
+    <img src="https://img.shields.io/badge/YouTube-FF0000?style=for-the-badge&logo=youtube&logoColor=white" alt="YouTube" />
   </p>
 
   <br />
@@ -20,11 +21,11 @@
 
 ## 🎯 Sobre o Projeto
 
-O **Furious Multi Chat Pro** é uma aplicação desktop de alta performance criada especificamente para streamers que transmitem em múltiplas plataformas. Ele unifica os chats da **Twitch, TikTok e Kick** em uma única interface elegante, transparente e customizável, ideal para sobrepor em jogos ou utilizar no OBS Studio.
+O **Furious Multi Chat Pro** é uma aplicação desktop de alta performance criada especificamente para streamers que transmitem em múltiplas plataformas. Ele unifica os chats da **Twitch, TikTok, Kick e YouTube** em uma única interface elegante, transparente e customizável, ideal para sobrepor em jogos ou utilizar no OBS Studio.
 
 ## ✨ Principais Funcionalidades
 
-- **🌐 Chat Multi-Plataforma**: Capture e visualize mensagens do Twitch, TikTok e Kick em tempo real em uma única janela.
+- **🌐 Chat Multi-Plataforma**: Capture e visualize mensagens do Twitch, TikTok, Kick e YouTube em tempo real em uma única janela.
 - **📊 Estatísticas em Tempo Real**: Painel com viewers online, **total de visualizações acumuladas** (TikTok), uptime da transmissão e curtidas — tudo atualizado ao vivo.
 - **🟢 Status de Conexão Inteligente**: Tooltip nos viewers que exibe o estado real de cada plataforma — "Offline" quando desconectada, "0" quando conectada mas sem espectadores, e o número real quando há viewers.
 - **🎨 Design Premium & Glassmorphism**: Interface moderna, fluida e com suporte a transparência e efeito blur (desfoque nativo do Windows).
@@ -72,6 +73,7 @@ Na primeira execução, o sistema gerará automaticamente o arquivo `settings.js
     "twitch": "seu_canal_twitch",
     "tiktok": "seu_canal_tiktok",
     "kick": "seu_canal_kick",
+    "youtube": "seu_video_id_ou_canal_youtube",
     "language": "pt-br",
     "opacity": 0.85,
     "theme": "dark",
@@ -83,6 +85,7 @@ Na primeira execução, o sistema gerará automaticamente o arquivo `settings.js
         "twitch": "#9146FF",
         "tiktok": "#FF0050",
         "kick": "#53FC18",
+        "youtube": "#FF0000",
         "system": "#333333"
     },
     "tts_enabled": false,
@@ -90,6 +93,7 @@ Na primeira execução, o sistema gerará automaticamente o arquivo `settings.js
     "tts_voice_twitch": "pt-BR-AntonioNeural",
     "tts_voice_tiktok": "pt-BR-FranciscaNeural",
     "tts_voice_kick": "pt-BR-ThalitaMultilingualNeural",
+    "tts_voice_youtube": "pt-BR-DonatoNeural",
     "hotkey_toggle_visibility": "ctrl+shift+h",
     "hotkey_clear_chat": "ctrl+shift+c",
     "tiktok_session_id": "DPAPI:..."

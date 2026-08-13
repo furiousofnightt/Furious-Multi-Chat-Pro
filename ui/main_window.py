@@ -80,6 +80,12 @@ class JoinNotificationBanner(QFrame):
         if not self.is_showing:
             self.process_queue()
 
+    def clear_platform(self, platform):
+        """Remove todos os usuários pendentes dessa plataforma da fila."""
+        self.queue = deque([item for item in self.queue if item[1] != platform])
+        # Se a notificação atual for dessa plataforma e estiver visível, podemos deixá-la terminar (leva max 3s)
+        # ou ocultá-layer imediatamente, mas a fila pendente já foi apagada.
+
     def process_queue(self):
         if not self.queue:
             self.fade_out()
@@ -299,6 +305,24 @@ class ChatWindow(QMainWindow):
         # É necessário mostrar a janela novamente após mudar flags
         self.show()
 
+    def toggle_clickthrough(self):
+        is_transparent = bool(self.windowFlags() & Qt.WindowType.WindowTransparentForInput)
+        new_state = not is_transparent
+        self.set_click_through(new_state)
+        
+        # Opcional: salvar a preferência no settings se desejar, mas como é modo jogo, pode ser temporário
+        if hasattr(self, 'settings_manager'):
+            self.settings_manager.settings['click_through'] = new_state
+            self.settings_manager.save_settings()
+            
+        status = "Ativado (Mouse ignora o chat)" if new_state else "Desativado (Mouse interage com o chat)"
+        
+        # Usa um try pra evitar erro se add_message não existir na hora do startup
+        try:
+            self.add_message("Sistema", f"🖱️ Modo Fantasma {status}!", "system")
+        except AttributeError:
+            pass
+
     def keyPressEvent(self, event):
         # Atalho '/' para abrir comandos
         if event.key() == Qt.Key.Key_Slash:
@@ -414,6 +438,11 @@ class ChatWindow(QMainWindow):
         if hasattr(self, 'join_banner'):
             self.join_banner.add_user(username, platform)
 
+    def clear_platform_joins(self, platform):
+        """Limpa a fila de notificações pendentes de uma plataforma desconectada."""
+        if hasattr(self, 'join_banner'):
+            self.join_banner.clear_platform(platform)
+
     def reset_live_stats(self):
         """ Reseta todos os contadores da interface para o estado inicial """
         self._live_start_time = None
@@ -465,13 +494,15 @@ class ChatWindow(QMainWindow):
         ttk = platform_viewers.get("tiktok", 0)
         tw  = platform_viewers.get("twitch", 0)
         kk  = platform_viewers.get("kick", 0)
+        yt  = platform_viewers.get("youtube", 0)
         
         is_ttk_connected = platform_status.get("tiktok", False)
         is_tw_connected = platform_status.get("twitch", False)
         is_kk_connected = platform_status.get("kick", False)
+        is_yt_connected = platform_status.get("youtube", False)
         
         # Se for tudo vazio e offline, exibe o default
-        if ttk == 0 and tw == 0 and kk == 0 and not any([is_ttk_connected, is_tw_connected, is_kk_connected]):
+        if ttk == 0 and tw == 0 and kk == 0 and yt == 0 and not any([is_ttk_connected, is_tw_connected, is_kk_connected, is_yt_connected]):
             self.viewers_lbl.setToolTip(f"<html>{eye_icon} Views (Baseado na plataforma primária)</html>")
             return
 
@@ -501,6 +532,13 @@ class ChatWindow(QMainWindow):
             html.append("<tr><td style='padding-right: 10px;'>Kick:</td><td style='color: #53fc18;'>0</td></tr>")
         else:
             html.append("<tr><td style='padding-right: 10px; color: #888;'>Kick:</td><td style='color: #888;'>Offline</td></tr>")
+
+        if yt > 0:
+            html.append(f"<tr><td style='padding-right: 10px;'>YouTube:</td><td><b>{self.format_stat_number(yt)}</b></td></tr>")
+        elif is_yt_connected:
+            html.append("<tr><td style='padding-right: 10px;'>YouTube:</td><td style='color: #ff0000;'>0</td></tr>")
+        else:
+            html.append("<tr><td style='padding-right: 10px; color: #888;'>YouTube:</td><td style='color: #888;'>Offline</td></tr>")
         
         html.append("</table></html>")
         
@@ -917,7 +955,7 @@ class ChatWindow(QMainWindow):
             
             # Fallbacks caso o dicionário esteja incompleto
             bg_color = platform_colors.get(platform, platform_colors.get("tiktok", "#555555") if platform == "tiktok_event" else "#555555")
-            label_text = {"twitch": "TW", "tiktok": "TT", "tiktok_event": "TT", "kick": "KK", "system": "MSG"}.get(platform, "??")
+            label_text = {"twitch": "TW", "tiktok": "TT", "tiktok_event": "TT", "kick": "KK", "youtube": "YT", "system": "MSG"}.get(platform, "??")
             text_color = "black" if platform == "kick" else "white"
             
             icon_platform = "tiktok" if platform == "tiktok_event" else platform

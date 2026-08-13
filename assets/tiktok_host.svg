@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="18" height="18">
+    <rect width="512" height="512" rx="128" fill="#FF2A4D"/>
+    <!-- Centered Crown -->
+    <path fill="#FFF" d="M464 128l-104 96-104-160-104 160-104-96v256h416v-256z" />
+</svg>

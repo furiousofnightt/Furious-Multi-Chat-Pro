@@ -274,6 +274,46 @@ EMOTICONS_MAP = {
     "[joystick]": "🕹️", "[gaming]": "🎮", "[controller]": "🎮",
     "[pac_man]": "👾", "[space_invader]": "👾", "[chess]": "♟️",
     "[puzzle]": "🧩", "[slot_machine]": "🎰", "[dart]": "🎯",
+
+    # ===== EMOTES OFICIAIS DO TIKTOK LIVE (nome completo) =====
+    # Série Rosie (emotes mais comuns vistos no TikTok Live)
+    "[rosiekisskiss]": "😘", "[rosieawkward]": "😅", "[rosiedislike]": "👎",
+    "[rosieblush]": "😊", "[rosiehappy]": "😁", "[rosiesad]": "😢",
+    "[rosielove]": "🥰", "[rosiecrying]": "😭", "[rosiesurprised]": "😲",
+    "[rosieangry]": "😡", "[rosiescared]": "😨", "[rosiedizzy]": "😵",
+    "[rosiecool]": "😎", "[rosiewink]": "😉", "[rosiegrin]": "😀",
+    "[rosiethinking]": "🤔", "[rosierolleyes]": "🙄", "[rosiesick]": "🤢",
+    "[rosiedrool]": "🤤", "[rosiesweat]": "😓", "[rosieshocked]": "😱",
+    "[rosiemischievous]": "😏", "[rosieexcited]": "🤩", "[rosiehushed]": "🤫",
+    "[rosieyawn]": "🥱", "[rosiebored]": "😑", "[rosiecrazy]": "🤪",
+
+    # Dinheiro e gaming (sagemoney etc.)
+    "[sagemoney]": "💰", "[sagecool]": "😎", "[sagehappy]": "😁",
+    "[sagelove]": "🥰", "[sagewink]": "😉", "[sageangry]": "😡",
+    "[sagesad]": "😢", "[sagecrying]": "😭",
+
+    # Expressões genéricas TikTok padronizadas
+    "[joy]": "😂", "[blush]": "😊", "[grin]": "😁", "[heart_eyes]": "😍",
+    "[kissing_heart]": "😘", "[stuck_out_tongue_winking_eye]": "😜",
+    "[smirk]": "😏", "[unamused]": "😒", "[sob]": "😭", "[sweat_smile]": "😅",
+    "[grimacing]": "😬", "[expressionless]": "😑", "[confused]": "😕",
+    "[hushed]": "🤫", "[open_mouth]": "😮", "[anguished]": "😧",
+    "[fearful]": "😨", "[weary]": "😩", "[triumph]": "😤",
+    "[skull]": "💀", "[fire]": "🔥", "[100]": "💯", "[tada]": "🎉",
+    "[gem]": "💎", "[moneybag]": "💰", "[crown]": "👑", "[trophy]": "🏆",
+    "[muscle]": "💪", "[clap]": "👏", "[pray]": "🙏", "[wave]": "👋",
+    "[ok_hand]": "👌", "[point_right]": "👉", "[raised_hands]": "🙌",
+    "[eyes]": "👀", "[sparkles]": "✨", "[rainbow]": "🌈",
+    "[rose]": "🌹", "[cherry_blossom]": "🌸", "[sunflower]": "🌻",
+    "[gift]": "🎁", "[birthday]": "🎂", "[popcorn]": "🍿",
+    "[coffee]": "☕", "[beer]": "🍺", "[pizza]": "🍕",
+    "[rocket]": "🚀", "[car]": "🚗", "[airplane]": "✈️",
+    "[panda]": "🐼", "[lion]": "🦁", "[tiger]": "🐯",
+    "[dog]": "🐶", "[cat]": "🐱", "[rabbit]": "🐰",
+    "[heart]": "❤️", "[orange_heart]": "🧡", "[yellow_heart]": "💛",
+    "[green_heart]": "💚", "[blue_heart]": "💙", "[purple_heart]": "💜",
+    "[black_heart]": "🖤", "[white_heart]": "🤍", "[pink_heart]": "🩷",
+    "[broken_heart]": "💔", "[heartpulse]": "💗", "[two_hearts]": "💕",
 }
 
 def convert_emoticons(text):

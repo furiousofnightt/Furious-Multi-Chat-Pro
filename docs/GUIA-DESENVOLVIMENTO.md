@@ -39,12 +39,14 @@ O `tiktok_session_id` é criptografado automaticamente pelo `SettingsManager` vi
 ## Adicionando Nova Plataforma
 
 1. Criar `chat_handlers/newplatform_handler.py` herdando `BaseChatHandler`
-2. Emitir `stats_updated(viewers, 0, 0, 0)` — 4 valores obrigatórios
-3. Registrar em `ChatManager.start_all()` e `restart_platform()`:
+2. Emitir `stats_updated(viewers, 0, 0, 0)` — 4 valores obrigatórios (onde o TikTok usa uptime/total, enquanto os demais herdam 0).
+3. Registrar em `ChatManager.start_all()` e no controle dinâmico em `main.py` (`open_config`).
+4. Conectar os Stats:
    ```python
    h.stats_updated.connect(lambda v, u, l, t: self.platform_stats_updated.emit("nova", v, u, l, t))
    ```
-4. Adicionar campos em `ConfigWindow` e traduções em `translations.py`
+5. Registrar a plataforma na lista de fallback de painel (`core/chat_manager.py` no método `_on_platform_stats`), para caso a plataforma esteja rodando sozinha, ela seja capaz de engatilhar o start do timer nativo da GUI e comandar os Views principais da tela.
+6. Adicionar campos em `ConfigWindow` e as chaves em `translations.py`.
 
 ## Build
 

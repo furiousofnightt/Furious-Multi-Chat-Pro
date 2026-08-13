@@ -8,6 +8,7 @@ TRANSLATIONS = {
         "twitch_label": "Twitch @Username:",
         "tiktok_label": "TikTok @Username:",
         "kick_label": "Kick @Username:",
+        "youtube_label": "YouTube @Username:",
         "glassmorphism_label": "Ativar Efeito Vidro Translúcido (Glassmorphism - Win11)",
         "opacity_label": "Opacidade da Janela:",
         "delay_label": "Atraso p/ Leitura (Lentidão das mensagens):",
@@ -26,6 +27,7 @@ TRANSLATIONS = {
         "twitch_color_label": "Cor Twitch:",
         "tiktok_color_label": "Cor TikTok:",
         "kick_color_label": "Cor Kick:",
+        "youtube_color_label": "Cor YouTube:",
         "pick_color": "Escolher Cor",
         
         # System Messages - Twitch
@@ -38,8 +40,9 @@ TRANSLATIONS = {
         "tiktok_connect_attempt": "Sistema",
         "tiktok_attempting": "Tentando conectar ao TikTok: {username}...",
         "tiktok_connected": "Conectado ao TikTok: {username}",
-        "tiktok_disconnected": "Conexão com TikTok encerrada.",
+        "tiktok_disconnected": "Conexão com TikTok encerrada. Tentando reconectar...",
         "tiktok_error": "TikTok desconectado ({error}).",
+        "tiktok_offline": "Canal do TikTok '@{username}' está offline ou não foi encontrado.",
         "tiktok_rate_limited": "⚠️ RATE LIMIT ATIVADO para {username}!\nLimite de requisições foi excedido.\nAguarde ~16-24 horas para tentar novamente.\nErro: {error}",
         
         
@@ -65,6 +68,10 @@ TRANSLATIONS = {
         "hotkeys_hint": "Clique no campo e pressione a combinação. ESC cancela.",
         "hotkey_toggle": "Mostrar/Esconder Chat:",
         "hotkey_clear": "Limpar Chat:",
+        "hotkey_clickthrough": "Modo Fantasma:",
+        "info_toggle": "Oculta ou exibe a janela do chat na tela.",
+        "info_clear": "Apaga todas as mensagens atuais do chat na sua tela.",
+        "info_clickthrough": "Faz o chat ignorar o mouse, evitando cliques\nacidentais enquanto joga. Aperte novamente para desativar.",
     },
     "en": {
         # Config Window
@@ -72,7 +79,8 @@ TRANSLATIONS = {
         "twitch_label": "Twitch @Username:",
         "tiktok_label": "TikTok @Username:",
         "kick_label": "Kick @Username:",
-        "glassmorphism_label": "Enable Glass Morphism Effect (Glassmorphism - Win11)",
+        "youtube_label": "YouTube @Username/URL:",
+        "glassmorphism_label": "Enable Glassmorphism Effect (Glassmorphism - Win11)",
         "opacity_label": "Window Opacity:",
         "delay_label": "Message Delay (Slowness):",
         "language_label": "Language / Idioma:",
@@ -90,6 +98,7 @@ TRANSLATIONS = {
         "twitch_color_label": "Twitch Color:",
         "tiktok_color_label": "TikTok Color:",
         "kick_color_label": "Kick Color:",
+        "youtube_color_label": "YouTube Color:",
         "pick_color": "Pick Color",
         
         # System Messages - Twitch
@@ -102,8 +111,9 @@ TRANSLATIONS = {
         "tiktok_connect_attempt": "System",
         "tiktok_attempting": "Attempting to connect to TikTok: {username}...",
         "tiktok_connected": "Connected to TikTok: {username}",
-        "tiktok_disconnected": "TikTok connection closed.",
+        "tiktok_disconnected": "TikTok connection closed. Attempting to reconnect...",
         "tiktok_error": "TikTok disconnected ({error}).",
+        "tiktok_offline": "TikTok channel '@{username}' is offline or could not be found.",
         "tiktok_rate_limited": "⚠️ RATE LIMIT ACTIVATED for {username}!\nRequest limit exceeded.\nWait ~16-24 hours to try again.\nError: {error}",
         
         
@@ -129,6 +139,10 @@ TRANSLATIONS = {
         "hotkeys_hint": "Click the field and press the combo. ESC cancels.",
         "hotkey_toggle": "Show/Hide Chat:",
         "hotkey_clear": "Clear Chat:",
+        "hotkey_clickthrough": "Ghost Mode:",
+        "info_toggle": "Hides or shows the chat window on the screen.",
+        "info_clear": "Clears all current messages from the chat on your screen.",
+        "info_clickthrough": "Makes the chat ignore the mouse, preventing accidental\nclicks while playing. Press the shortcut again to disable.",
     }
 }
 

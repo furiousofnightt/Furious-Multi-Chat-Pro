@@ -73,14 +73,21 @@ def main():
     hotkey_manager.toggle_visibility_requested.connect(toggle_window_visibility)
     hotkey_manager.clear_chat_requested.connect(window.clear_chat)
     hotkey_manager.toggle_tts_requested.connect(window.toggle_tts)
+    hotkey_manager.toggle_clickthrough_requested.connect(window.toggle_clickthrough)
     hotkey_manager.start()
-    print(f"⌨️ Hotkeys ativas: Mostrar/Esconder={settings.settings.get('hotkey_toggle_visibility','ctrl+shift+h')} | Limpar={settings.settings.get('hotkey_clear_chat','ctrl+shift+c')} | Voz={settings.settings.get('hotkey_toggle_tts','ctrl+m')}")
+    
+    hk_vis = settings.settings.get('hotkey_toggle_visibility','ctrl+shift+h')
+    hk_clear = settings.settings.get('hotkey_clear_chat','ctrl+shift+c')
+    hk_tts = settings.settings.get('hotkey_toggle_tts','ctrl+m')
+    hk_clickthrough = settings.settings.get('hotkey_clickthrough','ctrl+alt+t')
+    print(f"⌨️ Hotkeys ativas: Mostrar/Esconder={hk_vis} | Limpar={hk_clear} | Voz={hk_tts} | Click-Through={hk_clickthrough}")
     # ----------------------
     
     def open_config():
         old_twitch = settings.settings.get("twitch", "")
         old_tiktok = settings.settings.get("tiktok", "")
         old_kick = settings.settings.get("kick", "")
+        old_youtube = settings.settings.get("youtube", "")
         old_lang = settings.settings.get("language", "pt-br")
         
         config_ui = ConfigWindow(settings, window, chat_manager)
@@ -96,13 +103,20 @@ def main():
             new_twitch = settings.settings.get("twitch", "")
             new_tiktok = settings.settings.get("tiktok", "")
             new_kick = settings.settings.get("kick", "")
+            new_youtube = settings.settings.get("youtube", "")
             new_lang = settings.settings.get("language", "pt-br")
             
-            if (old_twitch != new_twitch or 
-                old_tiktok != new_tiktok or 
-                old_kick != new_kick or
-                old_lang != new_lang):
+            if old_lang != new_lang:
                 chat_manager.restart_all()
+            else:
+                if old_twitch != new_twitch:
+                    chat_manager.restart_platform("twitch")
+                if old_tiktok != new_tiktok:
+                    chat_manager.restart_platform("tiktok")
+                if old_kick != new_kick:
+                    chat_manager.restart_platform("kick")
+                if old_youtube != new_youtube:
+                    chat_manager.restart_platform("youtube")
     
     window.settings_requested.connect(open_config)
     # Aplicar configurações iniciais ANTES de mostrar

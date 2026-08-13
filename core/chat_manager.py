@@ -3,6 +3,7 @@ from PyQt6.QtCore import QObject, pyqtSignal, QTimer
 from chat_handlers.twitch_handler import TwitchHandler
 from chat_handlers.tiktok_handler import TikTokHandler
 from chat_handlers.kick_handler import KickHandler
+from chat_handlers.youtube_handler import YoutubeHandler
 from utils.translations import get_translation
 import asyncio
 import threading
@@ -41,9 +42,9 @@ class ChatManager(QObject):
         self.async_manager.start()
         
         # Estado de conexão
-        self.statuses = {"twitch": False, "tiktok": False, "kick": False}
+        self.statuses = {"twitch": False, "tiktok": False, "kick": False, "youtube": False}
         # Viewers por plataforma (para tooltip)
-        self._platform_viewers = {"twitch": 0, "tiktok": 0, "kick": 0}
+        self._platform_viewers = {"twitch": 0, "tiktok": 0, "kick": 0, "youtube": 0}
         
         # Conectar sinal de comandos da UI
         self.window.command_executed.connect(self.handle_command)
@@ -66,6 +67,12 @@ class ChatManager(QObject):
         self.window.reset_live_stats()
         self.message_queue.clear()
         self.message_timer.stop()
+        
+        # Reset internal states
+        self._platform_viewers = {"twitch": 0, "tiktok": 0, "kick": 0, "youtube": 0}
+        self.statuses = {"twitch": False, "tiktok": False, "kick": False, "youtube": False}
+        self.window.update_secondary_viewers(self._platform_viewers.copy(), self.statuses.copy())
+        
         lang = self.settings.settings.get("language", "pt-br")
         
         # Garantir que o loop async está pronto
@@ -83,6 +90,18 @@ class ChatManager(QObject):
             h.stats_updated.connect(lambda v, u, l, t: self.platform_stats_updated.emit("twitch", v, u, l, t))
             self.update_status("twitch", False)
             h.start()
+            self.handlers.append(h)
+
+        # YouTube
+        if self.settings.settings.get("youtube"):
+            h = YoutubeHandler(self.settings.settings["youtube"])
+            h.set_language(lang)
+            h.message_received.connect(self.on_message_received)
+            h.user_joined.connect(self.window.add_user_joined)
+            h.status_changed.connect(lambda connected: self.update_status("youtube", connected))
+            h.stats_updated.connect(lambda v, u, l, t: self.platform_stats_updated.emit("youtube", v, u, l, t))
+            self.update_status("youtube", False)
+            h.start()  # usa threading nativo
             self.handlers.append(h)
 
 
@@ -113,6 +132,30 @@ class ChatManager(QObject):
         self.statuses[platform] = connected
         self.status_changed.emit(platform, connected)
         self.window.update_secondary_viewers(self._platform_viewers.copy(), self.statuses.copy())
+        if not connected:
+            # Limpa fila de "fulano entrou na live" da plataforma que desconectou
+            if hasattr(self.window, 'clear_platform_joins'):
+                self.window.clear_platform_joins(platform)
+            self._refresh_main_stats()
+
+    def _refresh_main_stats(self):
+        """Atualiza a HUD principal quando um chat desconecta, garantindo que o fallback funcione ou limpe tudo se for o último."""
+        # Se nenhuma plataforma estiver conectada, limpa a HUD e o chat
+        if not any(self.statuses.values()):
+            self.window.reset_live_stats()
+            self.window.clear_chat()
+            return
+            
+        # Se TikTok estiver online, não faz nada (ele gerencia sozinho)
+        if self.statuses.get("tiktok", False):
+            return
+            
+        # Tenta achar o próximo substituto online para dominar a HUD
+        for p in ("twitch", "kick", "youtube"):
+            if self.statuses.get(p, False):
+                v = self._platform_viewers.get(p, 0)
+                self.window.update_live_stats(v, 0, 0, 0)
+                return
 
     def _resolve_viewer_value(self, platform, viewers):
         """Evita que valores temporários 0 do TikTok derrubem o tooltip e o contador."""
@@ -144,8 +187,8 @@ class ChatManager(QObject):
         # Somente TikTok alimenta o painel principal de stats (uptime + likes)
         if platform == "tiktok":
             self.window.update_live_stats(effective_viewers, uptime_seconds, likes, total_views)
-        elif platform in ("twitch", "kick"):
-            # Twitch/Kick: só passa viewers para o display principal
+        elif platform in ("twitch", "kick", "youtube"):
+            # Twitch/Kick/YouTube: só passa viewers para o display principal
             # se o TikTok não estiver conectado (fallback)
             if not self.statuses.get("tiktok", False):
                 self.window.update_live_stats(effective_viewers, uptime_seconds, likes, total_views)
@@ -217,6 +260,7 @@ class ChatManager(QObject):
                     print(f"⚠️ Erro ao parar handler {platform}: {e}")
                 self.handlers.remove(h)
         
+        self._platform_viewers[platform] = 0
         self.update_status(platform, False)
         
         lang = self.settings.settings.get("language", "pt-br")
@@ -231,6 +275,15 @@ class ChatManager(QObject):
             h.user_joined.connect(self.window.add_user_joined)
             h.status_changed.connect(lambda connected: self.update_status("twitch", connected))
             h.stats_updated.connect(lambda v, u, l, t: self.platform_stats_updated.emit("twitch", v, u, l, t))
+            h.start()
+            self.handlers.append(h)
+        elif platform == "youtube":
+            h = YoutubeHandler(username)
+            h.set_language(lang)
+            h.message_received.connect(self.on_message_received)
+            h.user_joined.connect(self.window.add_user_joined)
+            h.status_changed.connect(lambda connected: self.update_status("youtube", connected))
+            h.stats_updated.connect(lambda v, u, l, t: self.platform_stats_updated.emit("youtube", v, u, l, t))
             h.start()
             self.handlers.append(h)
         elif platform == "tiktok":
