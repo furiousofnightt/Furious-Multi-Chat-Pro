@@ -6,6 +6,7 @@
 3. [Problemas de Chat/Mensagens](#problemas-de-chatmensagens)
 4. [Problemas de Performance](#problemas-de-performance)
 5. [Erros Específicos](#erros-específicos)
+6. [Problemas com Voz / TTS](#problemas-com-voz--tts)
 
 ---
 
@@ -279,6 +280,40 @@ ren settings.json settings.json.bak
 ```
 
 O programa recriará com defaults na próxima execução.
+
+---
+
+## Problemas com Voz / TTS
+
+### Edge TTS parou de falar ou dá erro `403 WSServerHandshakeError`
+
+**Sintomas**: As mensagens chegam no chat mas o bot não lê em voz alta, ou aparece erro 403 / handshake no console.
+
+**Causa**: A Microsoft desativou o endpoint legado `speech.platform.bing.com` para síntese via WebSocket, exigindo a migração para `api.msedgeservices.com`.
+
+**Solução implementada no app**:
+- O Furious Multi Chat Pro já inclui uma correção interna no `tts_engine.py` que redireciona automaticamente as requisições para o novo endpoint seguro `api.msedgeservices.com`.
+- **Caso prefira ou ocorra instabilidade na Microsoft**: Basta abrir **Configurações** → aba **Voz do Bot (TTS)** → selecionar **Google TTS (Alternativo)** e salvar.
+
+---
+
+### TTS ativado mas nenhum áudio é reproduzido
+
+**Verificações**:
+1. **Ativação global**: Confira se a opção *Ativar Leitura de Chat (TTS)* está marcada nas configurações.
+2. **Mute temporário**: Verifique se o áudio não foi mutado via atalho `Ctrl+M`. Pressione `Ctrl+M` novamente ou reative nas configurações.
+3. **Volume da Voz**: Verifique o slider de volume nas configurações de voz (garanta que não está em 0%).
+4. **Dispositivo de saída**: Verifique se o dispositivo de som padrão do Windows está ativo e funcionando.
+5. **Filtro de prefixo**: Verifique se as mensagens no chat não estão sendo filtradas por links, comandos com `!` ou spam.
+
+---
+
+### Executável compilado (.exe) não toca voz do Google TTS
+
+**Causa**: O módulo `gtts` e seus pacotes de dados dependentes não foram incluídos no bundle do PyInstaller.
+
+**Solução**:
+- Compile utilizando sempre o script automatizado `build.py` (`py build.py`), que já contém todas as flags `--hidden-import` e `--collect-all=gtts` necessárias.
 
 ---
 

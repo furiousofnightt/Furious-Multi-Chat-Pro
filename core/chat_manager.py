@@ -113,6 +113,8 @@ class ChatManager(QObject):
             h.user_joined.connect(self.window.add_user_joined)
             h.status_changed.connect(lambda connected: self.update_status("tiktok", connected))
             h.stats_updated.connect(lambda v, u, l, t: self.platform_stats_updated.emit("tiktok", v, u, l, t))
+            if hasattr(self.window, "update_tiktok_viewers"):
+                h.viewers_list_updated.connect(self.window.update_tiktok_viewers)
             self.update_status("tiktok", False)
             h.start_with_loop(self.async_manager.loop)
             self.handlers.append(h)
@@ -130,6 +132,9 @@ class ChatManager(QObject):
 
     def update_status(self, platform, connected):
         self.statuses[platform] = connected
+        if not connected:
+            self._platform_viewers[platform] = 0
+            
         self.status_changed.emit(platform, connected)
         self.window.update_secondary_viewers(self._platform_viewers.copy(), self.statuses.copy())
         if not connected:
@@ -140,10 +145,9 @@ class ChatManager(QObject):
 
     def _refresh_main_stats(self):
         """Atualiza a HUD principal quando um chat desconecta, garantindo que o fallback funcione ou limpe tudo se for o último."""
-        # Se nenhuma plataforma estiver conectada, limpa a HUD e o chat
+        # Se nenhuma plataforma estiver conectada, apenas reseta os contadores da HUD (não apaga as mensagens da tela)
         if not any(self.statuses.values()):
             self.window.reset_live_stats()
-            self.window.clear_chat()
             return
             
         # Se TikTok estiver online, não faz nada (ele gerencia sozinho)
@@ -178,7 +182,6 @@ class ChatManager(QObject):
         - Viewers de Twitch/Kick são armazenados e exibidos no tooltip.
         """
         effective_viewers = self._resolve_viewer_value(platform, viewers)
-        print(f"[DEBUG STATS] platform={platform} viewers={viewers} effective_viewers={effective_viewers} uptime={uptime_seconds} likes={likes}")
 
         # Armazena e notifica a UI, preservando o último valor válido do TikTok quando ele manda 0 temporariamente.
         self._platform_viewers[platform] = effective_viewers
@@ -258,6 +261,13 @@ class ChatManager(QObject):
                     h.stop()
                 except Exception as e:
                     print(f"⚠️ Erro ao parar handler {platform}: {e}")
+                for sig_name in ("message_received", "user_joined", "status_changed", "stats_updated", "viewers_list_updated"):
+                    sig = getattr(h, sig_name, None)
+                    if sig:
+                        try:
+                            sig.disconnect()
+                        except Exception:
+                            pass
                 self.handlers.remove(h)
         
         self._platform_viewers[platform] = 0
@@ -266,6 +276,20 @@ class ChatManager(QObject):
         lang = self.settings.settings.get("language", "pt-br")
         username = self.settings.settings.get(platform)
         if not username:
+            # Username removido desta plataforma
+            if hasattr(self.window, 'clear_platform_joins'):
+                self.window.clear_platform_joins(platform)
+
+            if platform == "tiktok":
+                if hasattr(self.window, 'clear_tiktok_viewers'):
+                    self.window.clear_tiktok_viewers()
+                elif hasattr(self.window, 'viewers_page') and self.window.viewers_page:
+                    self.window.viewers_page.clear_viewers()
+
+            # Só limpa o chat completo se TODAS as plataformas estiverem sem canal configurado
+            all_empty = not any(self.settings.settings.get(p) for p in ("twitch", "tiktok", "kick", "youtube"))
+            if all_empty and hasattr(self.window, 'clear_chat'):
+                self.window.clear_chat()
             return
             
         if platform == "twitch":
@@ -293,6 +317,8 @@ class ChatManager(QObject):
             h.user_joined.connect(self.window.add_user_joined)
             h.status_changed.connect(lambda connected: self.update_status("tiktok", connected))
             h.stats_updated.connect(lambda v, u, l, t: self.platform_stats_updated.emit("tiktok", v, u, l, t))
+            if hasattr(self.window, "update_tiktok_viewers"):
+                h.viewers_list_updated.connect(self.window.update_tiktok_viewers)
             h.start_with_loop(self.async_manager.loop)
             self.handlers.append(h)
         elif platform == "kick":
@@ -326,5 +352,10 @@ class ChatManager(QObject):
         for p in self.statuses:
             self.statuses[p] = False
             self.status_changed.emit(p, False)
+
+        if hasattr(self.window, 'clear_tiktok_viewers'):
+            self.window.clear_tiktok_viewers()
+        elif hasattr(self.window, 'viewers_page') and self.window.viewers_page:
+            self.window.viewers_page.clear_viewers()
         
         print("🛑 Todos os processos de chat foram encerrados.")

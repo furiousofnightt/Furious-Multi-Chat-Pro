@@ -186,6 +186,22 @@ Sim. Ative "Click-through" nas configurações. A janela ficará transparente a 
 
 ---
 
+## 👥 Espectadores Online (TikTok)
+
+### Como funciona a aba de Espectadores Online?
+O aplicativo possui uma visualização dedicada acessível pelo botão de alternância no header. Ela consulta a API oficial de audiência do TikTok a cada 4 segundos e exibe todos os usuários conectados na sua live com foto de perfil, nome, @username, pontuação de contribuição e numeração sequencial (#1 a #N).
+
+### Por que é necessário login no TikTok para ver os espectadores online?
+A rota de audiência em tempo real (`/webcast/ranklist/online_audience/`) do TikTok é um endpoint restrito que exige um cookie de sessão válido (`sessionid`). Sem login, o app desativa o loop automaticamente para evitar bloqueios por taxa de requisições (429/403) e exibe um card orientando a fazer login nas Configurações.
+
+### Por que o número de "Online" no topo pode ser maior do que a lista de perfis exibidos?
+O contador "X online" representa o total absoluto de pessoas conectadas na sala do TikTok. A lista detalhada exibe os espectadores que estão navegando logados em suas contas do TikTok. Usuários anônimos (sem conta aberta no navegador/app ou navegando em modo privado) são contabilizados no total geral, mas não possuem perfil individual para ser listado.
+
+### Como aumentar ou diminuir a fonte na lista de espectadores?
+No topo da aba de espectadores, clique nos botões **A-** (diminui a fonte) e **A+** (aumenta a fonte). O ajuste é aplicado instantaneamente em todos os cards sem recarregar a lista.
+
+---
+
 ## Técnico
 
 ### Por que mensagens do TikTok às vezes não aparecem?

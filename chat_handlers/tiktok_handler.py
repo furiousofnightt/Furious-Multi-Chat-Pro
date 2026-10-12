@@ -9,6 +9,15 @@ from TikTokLive.events import (
     WebsocketResponseEvent
 )
 
+# Novos eventos TikTok (fan club, super fan, conquistas) — carregados com getattr
+# para manter compatibilidade com versões mais antigas da lib
+SubNotifyEvent = getattr(TikTokEvents, "SubNotifyEvent", None)
+SuperFanEvent = getattr(TikTokEvents, "SuperFanEvent", None)
+SuperFanJoinEvent = getattr(TikTokEvents, "SuperFanJoinEvent", None)
+SuperFanBoxEvent = getattr(TikTokEvents, "SuperFanBoxEvent", None)
+RoomNotifyEvent = getattr(TikTokEvents, "RoomNotifyEvent", None)
+HourlyRankRewardEvent = getattr(TikTokEvents, "HourlyRankRewardEvent", None)
+
 CommentsEvent = getattr(TikTokEvents, "CommentsEvent", None)
 EcBarrageEvent = getattr(TikTokEvents, "EcBarrageEvent", None)
 
@@ -46,12 +55,14 @@ from .base_handler import BaseChatHandler
 from utils.emoticons import convert_emoticons, get_emote_url
 from utils.translations import get_translation
 from utils.resource_path import resource_path
+from utils.avatar_utils import make_circular_base64_png
 from TikTokLive.proto.custom_proto import ExtendedUser
 import asyncio
 import base64
 import httpx
 import time
 import os
+import re
 import traceback
 
 
@@ -65,6 +76,79 @@ class TikTokHandler(BaseChatHandler):
         self._rate_limited = False
         self._connected_event = None
         self._avatar_b64_cache = {}  # {user_id: "<img ...>"} — persiste entre reconexões
+        self._online_viewers_map = {} # {user_id: viewer_dict}
+
+    def _record_online_viewer(self, user, score=None, rank=None):
+        """Registra/atualiza espectador online em tempo real."""
+        if not user:
+            return
+        user_id = str(getattr(user, 'id', '') or '')
+        nickname = str(getattr(user, 'nickname', '') or getattr(user, 'nick_name', '') or getattr(user, 'display_id', '') or 'Usuário')
+        display_id = str(getattr(user, 'display_id', '') or getattr(user, 'unique_id', '') or '')
+
+        if not hasattr(self, '_online_viewers_map'):
+            self._online_viewers_map = {}
+
+        # Coleta avatar URLs
+        avatar_urls = []
+        for av_field in ['avatar_thumb', 'avatar_medium', 'avatar_large', 'avatar_168x168', 'avatar_300x300', 'avatar_jpg']:
+            av_obj = getattr(user, av_field, None)
+            if av_obj:
+                u_list = getattr(av_obj, 'url_list', None) or getattr(av_obj, 'urls_list', None) or []
+                if isinstance(u_list, list):
+                    for u in u_list:
+                        if u and u not in avatar_urls:
+                            avatar_urls.append(u)
+                elif isinstance(av_obj, str) and av_obj.startswith('http'):
+                    if av_obj not in avatar_urls:
+                        avatar_urls.append(av_obj)
+
+        avatar_url = avatar_urls[0] if avatar_urls else ''
+
+        key = user_id if user_id else (display_id or nickname)
+        existing = self._online_viewers_map.get(key, {})
+        current_score = score if score is not None else existing.get('score', 0)
+        current_rank = rank if rank is not None else existing.get('rank', 999)
+
+        self._online_viewers_map[key] = {
+            'user_id': user_id,
+            'nickname': nickname,
+            'display_id': display_id,
+            'score': current_score,
+            'rank': current_rank,
+            'avatar_url': avatar_url or existing.get('avatar_url', ''),
+            'avatar_urls': avatar_urls or existing.get('avatar_urls', []),
+            'last_active': time.time()
+        }
+
+    def _emit_realtime_viewers(self, total_online=0):
+        """Ordena e emite a lista de espectadores online atualizada na hora."""
+        if not hasattr(self, '_online_viewers_map') or not self._online_viewers_map:
+            return
+
+        now = time.time()
+        # Mantém quem tem pontuação ou interagiu nos últimos 15 minutos
+        self._online_viewers_map = {
+            k: v for k, v in self._online_viewers_map.items()
+            if v.get('score', 0) > 0 or (now - v.get('last_active', 0) < 900)
+        }
+
+        sorted_viewers = sorted(
+            self._online_viewers_map.values(),
+            key=lambda v: (
+                -v.get('score', 0),
+                v.get('rank', 999) if v.get('rank', 999) > 0 else 999,
+                -v.get('last_active', 0)
+            )
+        )
+
+        final_list = []
+        for i, v in enumerate(sorted_viewers[:50]):
+            v_copy = dict(v)
+            v_copy['rank'] = i + 1
+            final_list.append(v_copy)
+
+        self.viewers_list_updated.emit(final_list)
 
     def start_with_loop(self, loop):
         self.loop = loop
@@ -89,10 +173,8 @@ class TikTokHandler(BaseChatHandler):
                 kwargs = {
                     'unique_id': self.username,
                     'ws_kwargs': {
-                        'open_timeout': 10.0,
-                        'ping_interval': None,
-                        'ping_timeout': None,
-                        'close_timeout': 5.0,
+                        'open_timeout': 30.0,
+                        'close_timeout': 10.0,
                     }
                 }
 
@@ -175,11 +257,29 @@ class TikTokHandler(BaseChatHandler):
                         # Marca como em andamento antes de qualquer await
                         self._avatar_b64_cache[user_id] = None
                         avatar_url = None
-                        avatar_thumb = getattr(user_obj, 'avatar_thumb', None)
-                        if avatar_thumb:
-                            url_list = getattr(avatar_thumb, 'url_list', None)
-                            if url_list and len(url_list) > 0:
-                                avatar_url = url_list[0]
+                        for av_field in ['avatar_thumb', 'avatar_medium', 'avatar_large', 'avatar_168x168', 'avatar_300x300', 'avatar_jpg']:
+                            av_obj = getattr(user_obj, av_field, None)
+                            if av_obj:
+                                if isinstance(av_obj, dict):
+                                    u_list = av_obj.get('url_list') or av_obj.get('urls_list') or []
+                                    if u_list:
+                                        avatar_url = u_list[0]
+                                        break
+                                elif isinstance(av_obj, list):
+                                    for u in av_obj:
+                                        if u and isinstance(u, str) and u.startswith('http'):
+                                            avatar_url = u
+                                            break
+                                    if avatar_url:
+                                        break
+                                elif isinstance(av_obj, str) and av_obj.startswith('http'):
+                                    avatar_url = av_obj
+                                    break
+                                else:
+                                    u_list = getattr(av_obj, 'url_list', None) or getattr(av_obj, 'urls_list', None) or []
+                                    if u_list and len(u_list) > 0:
+                                        avatar_url = u_list[0]
+                                        break
                         if not avatar_url:
                             self._avatar_b64_cache[user_id] = ''
                             return ''
@@ -187,11 +287,14 @@ class TikTokHandler(BaseChatHandler):
                         async with httpx.AsyncClient(timeout=5.0, headers=headers) as hc:
                             resp = await hc.get(avatar_url)
                             if resp.status_code == 200 and resp.content:
-                                b64 = base64.b64encode(resp.content).decode()
-                                ct = resp.headers.get("content-type", "image/jpeg")
-                                tag = (f"<img src='data:{ct};base64,{b64}' "
-                                       f"width='22' height='22' "
-                                       f"style='border-radius:50%;vertical-align:middle;margin-right:3px;'>")
+                                b64_png = make_circular_base64_png(resp.content, size=22, border_color="rgba(255, 255, 255, 120)", border_width=1.0)
+                                if b64_png:
+                                    tag = f"<img src='data:image/png;base64,{b64_png}' width='22' height='22' style='vertical-align:middle;margin-right:4px;'>"
+                                else:
+                                    raw_b64 = base64.b64encode(resp.content).decode()
+                                    ct = resp.headers.get("content-type", "image/jpeg")
+                                    tag = f"<img src='data:{ct};base64,{raw_b64}' width='22' height='22' style='vertical-align:middle;margin-right:4px;'>"
+                                
                                 self._avatar_b64_cache[user_id] = tag
                                 # Limpar cache se ficar grande demais (~500 avatares)
                                 if len(self._avatar_b64_cache) > 500:
@@ -370,6 +473,8 @@ class TikTokHandler(BaseChatHandler):
                     uptime_seconds = max(0, int(time.time()) - current_start)
                     self.stats_updated.emit(viewers, uptime_seconds, self._total_likes, getattr(self, '_total_views', 0))
 
+
+
                 def _emit_if_new(author, msg, author_display=None):
                     now = time.time()
                     msg_key = f"{author}::{msg}"  # chave de dedup usa sempre o nome puro
@@ -410,50 +515,70 @@ class TikTokHandler(BaseChatHandler):
                         
                         raw = str(raw) if raw else ""
                         
-                        # 🔥 Emojis Customizados do TikTok
+                        # 1. Primeiro converte os emoticons de texto (ex: [laugh], KEKW) no texto puro
+                        msg = convert_emoticons(raw)
+                        
+                        # 2. 🔥 Emojis / Conquistas Customizados do TikTok
                         if getattr(event, 'emotes', None):
                             try:
                                 emotes_to_process = []
                                 for e in event.emotes:
                                     emote_obj = getattr(e, 'emote', None)
                                     idx = getattr(e, 'index', -1)
-                                    if emote_obj and idx >= 0:
+                                    if emote_obj:
                                         emotes_to_process.append((idx, emote_obj))
                                 
-                                # De trás pra frente para manter a validade dos índices
-                                emotes_to_process.sort(key=lambda x: x[0], reverse=True)
-                                
-                                for idx, emote_obj in emotes_to_process:
-                                    img_obj = getattr(emote_obj, 'image', None)
-                                    if not img_obj: continue
-                                    urls = getattr(img_obj, 'url_list', [])
-                                    if not urls: continue
+                                if emotes_to_process:
+                                    tags_by_idx = {}
+                                    append_tags = []
                                     
-                                    img_url = str(urls[0])
-                                    emote_id = str(getattr(emote_obj, 'emote_id', 'unknown'))
-                                    
-                                    # Roda de forma async (via thread do executor) para não bloquear o loop do TikTok
-                                    local_url = await asyncio.get_event_loop().run_in_executor(
-                                        None, get_emote_url, img_url, f"ttk_{emote_id}"
-                                    )
-                                    
-                                    if local_url:
-                                        img_tag = f"<img src='{local_url}' width='22' height='22' style='vertical-align: middle; margin: 0 1px;'>"
+                                    for idx, emote_obj in emotes_to_process:
+                                        img_obj = getattr(emote_obj, 'image', None)
+                                        if not img_obj:
+                                            continue
+                                        urls = getattr(img_obj, 'url_list', [])
+                                        if not urls:
+                                            continue
                                         
-                                        # Se existe um placeholder [...] na posição indicada, nós o substituímos.
-                                        if idx < len(raw) and raw[idx] == '[':
-                                            end_idx = raw.find(']', idx)
-                                            if end_idx != -1:
-                                                raw = raw[:idx] + img_tag + raw[end_idx+1:]
+                                        img_url = str(urls[0])
+                                        emote_id = str(getattr(emote_obj, 'emote_id', 'unknown'))
+                                        
+                                        # Roda de forma async (via thread do executor) para não bloquear o loop do TikTok
+                                        local_url = await asyncio.get_event_loop().run_in_executor(
+                                            None, get_emote_url, img_url, f"ttk_{emote_id}"
+                                        )
+                                        
+                                        if local_url:
+                                            img_tag = f"<img src='{local_url}' width='22' height='22' style='vertical-align: middle; margin: 0 1px;'>"
+                                            if idx is None or idx < 0 or idx >= len(msg):
+                                                append_tags.append(img_tag)
                                             else:
-                                                raw = raw[:idx] + img_tag + raw[idx:]
-                                        else:
-                                            # Fallback, insere na posição exata
-                                            raw = raw[:idx] + img_tag + raw[idx:]
+                                                if idx not in tags_by_idx:
+                                                    tags_by_idx[idx] = []
+                                                tags_by_idx[idx].append(img_tag)
+                                    
+                                    # Inserir no texto do fim para o começo do texto original para manter posições válidas
+                                    sorted_indices = sorted(tags_by_idx.keys(), reverse=True)
+                                    for idx in sorted_indices:
+                                        tags_str = " ".join(tags_by_idx[idx])
+                                        # Se houver placeholder [nome] na posição indicada, substitui até o ']'
+                                        if idx < len(msg) and msg[idx] == '[':
+                                            end_bracket = msg.find(']', idx)
+                                            if end_bracket != -1:
+                                                msg = msg[:idx] + tags_str + msg[end_bracket + 1:]
+                                                continue
+                                        # Caso contrário, insere com espaçamento limpo
+                                        p_space = " " if (idx > 0 and msg[idx-1] != ' ') else ""
+                                        s_space = " " if (idx < len(msg) and msg[idx] != ' ') else ""
+                                        msg = msg[:idx] + p_space + tags_str + s_space + msg[idx:]
+                                    
+                                    if append_tags:
+                                        msg = msg.strip() + " " + " ".join(append_tags)
+                                    
+                                    # Limpa espaços extras
+                                    msg = re.sub(r' +', ' ', msg).strip()
                             except Exception as em_e:
                                 print(f"⚠️ Erro ao processar emotes customizados do TikTok: {em_e}")
-
-                        msg = convert_emoticons(raw)
 
                         # user / user_info contains the raw proto User
                         user_obj = getattr(event, 'user', None) or getattr(event, 'user_info', None)
@@ -556,9 +681,12 @@ class TikTokHandler(BaseChatHandler):
                         system_patterns = [
                             'join_animation', 'pm_mt_alp', 'Text(key=', 'default_pattern',
                             'TextFormat', 'color=', 'font_size', 'weight=',
-                            'SystemMessage', 'Notification', 'WelcomeEvent'
+                            'SystemMessage', 'Notification', 'WelcomeEvent',
+                            # Padrões de superfã e fã-clube — tratados por handlers dedicados
+                            'ttlive_superfan', 'superfan', 'fan_club', 'fans_club',
+                            'subscribe_notify', 'sub_notify',
                         ]
-                        if any(p in msg_str for p in system_patterns):
+                        if any(p.lower() in msg_str.lower() for p in system_patterns):
                             return  # Ignorar mensagens do sistema
 
                         # Só processar se parecer uma mensagem de chat real
@@ -600,9 +728,12 @@ class TikTokHandler(BaseChatHandler):
                             system_patterns = [
                                 'join_animation', 'pm_mt_alp', 'Text(key=', 'default_pattern',
                                 'TextFormat', 'color=', 'font_size', 'weight=',
-                                'SystemMessage', 'Notification', 'WelcomeEvent'
+                                'SystemMessage', 'Notification', 'WelcomeEvent',
+                                # Padrões de superfã e fã-clube — tratados por handlers dedicados
+                                'ttlive_superfan', 'superfan', 'fan_club', 'fans_club',
+                                'subscribe_notify', 'sub_notify',
                             ]
-                            if any(p in msg_str for p in system_patterns):
+                            if any(p.lower() in msg_str.lower() for p in system_patterns):
                                 return
 
                             # Só processar se parecer uma mensagem de chat real
@@ -624,36 +755,7 @@ class TikTokHandler(BaseChatHandler):
                         except Exception as e:
                             print(f"⚠️ on_ec_barrage erro: {e}")
 
-                # DEBUG: Capturar TODOS os pacotes websocket para identificar mensagens perdidas
-                @self.client.on(WebsocketResponseEvent)
-                async def on_websocket_debug(event: WebsocketResponseEvent):
-                    """Debug profundo: analisa TODOS os pacotes websocket procurando mensagens."""
-                    try:
-                        if hasattr(event, 'base_message') and event.base_message:
-                            bm = event.base_message
-                            method = getattr(bm, 'method', 'unknown')
-                            payload = getattr(bm, 'payload', None)
 
-                            # LOGAR TODOS os métodos (para ver o que está chegando)
-                            if method:
-                                print(f"[DEBUG-ALL] method={method}")
-
-                            # Procurar por métodos relacionados a chat/comentários
-                            if method and any(x in str(method).lower() for x in ['chat', 'comment', 'message', 'barrage', 'im', 'push']):
-                                print(f"[DEBUG-CHAT] method={method}")
-
-                                if payload:
-                                    try:
-                                        import re
-                                        payload_str = payload.decode('utf-8', errors='ignore')
-                                        matches = re.findall(r'[\x20-\x7E]{3,}', payload_str)
-                                        potential_msgs = [m for m in matches if len(m) > 5 and ' ' in m][:5]
-                                        if potential_msgs:
-                                            print(f"[DEBUG-CHAT] Textos: {potential_msgs}")
-                                    except Exception:
-                                        pass
-                    except Exception:
-                        pass
 
                 # Handler para UnknownEvent - captura mensagens não reconhecidas pela lib
                 @self.client.on(UnknownEvent)
@@ -683,12 +785,22 @@ class TikTokHandler(BaseChatHandler):
                 async def on_emote_chat(event: EmoteChatEvent):
                     """Captura mensagens de usuários que usam emotes especiais (comum em inscritos)."""
                     try:
-                        # EmoteChatEvent geralmente tem a mensagem no campo 'comment' ou 'message'
-                        # mas muitas vezes o TikTok envia o texto como fallback
                         raw = getattr(event, 'comment', None) or getattr(event, 'message', None)
-                        if not raw and hasattr(event, 'emote'):
-                            # Se for só o emote, pegamos o ID/Nome dele
-                            raw = f"[{getattr(event.emote, 'emote_id', 'emote')}]"
+                        emote_obj = getattr(event, 'emote', None)
+                        
+                        if not raw and emote_obj:
+                            img_obj = getattr(emote_obj, 'image', None)
+                            urls = getattr(img_obj, 'url_list', []) if img_obj else []
+                            if urls:
+                                img_url = str(urls[0])
+                                emote_id = str(getattr(emote_obj, 'emote_id', 'unknown'))
+                                local_url = await asyncio.get_event_loop().run_in_executor(
+                                    None, get_emote_url, img_url, f"ttk_{emote_id}"
+                                )
+                                if local_url:
+                                    raw = f"<img src='{local_url}' width='22' height='22' style='vertical-align: middle; margin: 0 1px;'>"
+                            if not raw:
+                                raw = f"[{getattr(emote_obj, 'emote_id', 'emote')}]"
                         
                         if not raw: return
                         
@@ -719,14 +831,32 @@ class TikTokHandler(BaseChatHandler):
 
                 @self.client.on(GiftEvent)
                 async def on_gift(event: GiftEvent):
-                    """Exibe presentes do TikTok com ícone + nome + combo, igual ao app nativo."""
+                    """Exibe presentes do TikTok com avatar + nome + badges + ícone do presente."""
                     try:
                         if event.streaking:
                             return
 
-                        author     = event.user.nickname
+                        user_obj = getattr(event, 'user', None)
+                        author = "Usuário"
+                        if user_obj:
+                            author = getattr(user_obj, 'nickname', getattr(user_obj, 'nick_name', "Usuário"))
                         gift_name  = getattr(event.gift, 'name', None) or "Presente"
-                        gift_count = getattr(event, 'repeat_count', 1)
+                        gift_count = getattr(event, 'repeat_count', 1) or getattr(event.gift, 'repeat_count', 1) or 1
+
+                        # Avatar do usuário
+                        avatar_html = ''
+                        if user_obj:
+                            avatar_html = await _get_avatar_b64(user_obj)
+
+                        # Badges
+                        badge_str = ''
+                        if user_obj:
+                            try:
+                                badge_str = _get_badge_str(user_obj)
+                            except:
+                                pass
+
+                        author_display = f"{avatar_html}{author}{badge_str}" if (avatar_html or badge_str) else author
 
                         # Busca o ícone no cache construído pelo fetch_gift_list
                         icon_html = await _get_gift_icon_html(gift_name)
@@ -748,7 +878,6 @@ class TikTokHandler(BaseChatHandler):
                                             icon_url = url_list[0]
                                 
                                 if icon_url:
-                                    # FIX #6: Headers obrigatórios — sem eles, TikTok retorna 403 para presentes novos
                                     gift_headers = {
                                         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
                                         "Referer": "https://www.tiktok.com/"
@@ -761,13 +890,12 @@ class TikTokHandler(BaseChatHandler):
                                             icon_html = f"<img src='data:{ct};base64,{b64}'>"
                                             self._gift_icon_cache[gift_name.lower()] = icon_url
                                             self._gift_b64_cache[gift_name.lower()] = icon_html
-                                else:
-                                    print(f"⚠️ [DEBUG] Gift '{gift_name}' sem URL de ícone encontrada.")
                             except Exception as e:
-                                print(f"⚠️ [DEBUG] Erro no fallback do gift: {e}")
+                                pass
 
                         msg = get_translation("gift_sent_multiple", self.language, gift_name, icon_html, gift_count)
-                        self.message_received.emit(author, msg, "tiktok_event")
+                        self.message_received.emit(author_display, msg, "tiktok_event")
+
                     except Exception as e:
                         print(f"⚠️ Erro ao processar presente: {e}")
 
@@ -775,20 +903,169 @@ class TikTokHandler(BaseChatHandler):
                 @self.client.on(FollowEvent)
                 async def on_follow(event: FollowEvent):
                     try:
+                        user_obj = getattr(event, 'user', None)
                         author = getattr(event.user, 'nickname', getattr(event.user, 'nick_name', "Usuário"))
+                        avatar_html = ''
+                        if user_obj:
+                            avatar_html = await _get_avatar_b64(user_obj)
+                        author_display = f"{avatar_html}{author}" if avatar_html else author
                         msg = get_translation("follow_started", self.language)
-                        self.message_received.emit(author, msg, "tiktok_event")
+                        self.message_received.emit(author_display, msg, "tiktok_event")
                     except:
                         pass
 
                 @self.client.on(ShareEvent)
                 async def on_share(event: ShareEvent):
                     try:
+                        user_obj = getattr(event, 'user', None)
                         author = getattr(event.user, 'nickname', getattr(event.user, 'nick_name', "Usuário"))
+                        avatar_html = ''
+                        if user_obj:
+                            avatar_html = await _get_avatar_b64(user_obj)
+                        author_display = f"{avatar_html}{author}" if avatar_html else author
                         msg = get_translation("share_transmitted", self.language)
-                        self.message_received.emit(author, msg, "tiktok_event")
+                        self.message_received.emit(author_display, msg, "tiktok_event")
                     except:
                         pass
+
+                # ── Novos eventos: Fã-clube, Super Fã, Notificações de sala ─────────────
+
+                if SubNotifyEvent is not None:
+                    @self.client.on(SubNotifyEvent)
+                    async def on_sub_notify(event: SubNotifyEvent):
+                        """Fã-clube: entrada e milestones de meses (SubNotifyEvent)."""
+                        try:
+                            user_obj = getattr(event, 'user', None)
+                            author = "Usuário"
+                            if user_obj:
+                                author = (getattr(user_obj, 'nickname', None)
+                                          or getattr(user_obj, 'nick_name', None)
+                                          or "Usuário")
+
+                            # Número de meses no fã-clube
+                            sub_month = getattr(event, 'sub_month', 0) or 0
+
+                            # Avatar
+                            avatar_html = ''
+                            if user_obj:
+                                avatar_html = await _get_avatar_b64(user_obj)
+                            author_display = f"{avatar_html}{author}" if avatar_html else author
+
+                            # Ícone de fã-clube local
+                            fan_icon_path = resource_path('assets/tiktok_fan.svg').replace('\\', '/')
+                            fan_icon = (f"<img src='file:///{fan_icon_path}' "
+                                        f"width='18' height='18' "
+                                        f"style='vertical-align:middle;margin-right:3px;'>")
+
+                            if sub_month and int(sub_month) > 0:
+                                n = int(sub_month)
+                                # Singular/plural por idioma
+                                if self.language == "en":
+                                    unit = "month" if n == 1 else "months"
+                                else:  # pt-br e outros
+                                    unit = "mês" if n == 1 else "meses"
+                                time_str = f"{n} {unit}"
+                                msg = get_translation("fan_club_months", self.language, fan_icon, time_str)
+                            else:
+                                msg = get_translation("fan_club_joined", self.language, fan_icon)
+
+                            self.message_received.emit(author_display, msg, "tiktok_event")
+                        except Exception as e:
+                            print(f"⚠️ on_sub_notify erro: {e}")
+
+                if SuperFanEvent is not None:
+                    @self.client.on(SuperFanEvent)
+                    async def on_super_fan(event: SuperFanEvent):
+                        """Usuário se torna super fã (SuperFanEvent)."""
+                        try:
+                            user_obj = getattr(event, 'user', None)
+                            author = "Usuário"
+                            if user_obj:
+                                author = (getattr(user_obj, 'nickname', None)
+                                          or getattr(user_obj, 'nick_name', None)
+                                          or "Usuário")
+
+                            avatar_html = ''
+                            if user_obj:
+                                avatar_html = await _get_avatar_b64(user_obj)
+                            author_display = f"{avatar_html}{author}" if avatar_html else author
+
+                            fan_icon_path = resource_path('assets/tiktok_fan.svg').replace('\\', '/')
+                            fan_icon = (f"<img src='file:///{fan_icon_path}' "
+                                        f"width='18' height='18' "
+                                        f"style='vertical-align:middle;margin-right:3px;'>")
+                            msg = get_translation("super_fan_became", self.language, fan_icon)
+                            self.message_received.emit(author_display, msg, "tiktok_event")
+                        except Exception as e:
+                            print(f"⚠️ on_super_fan erro: {e}")
+
+                if SuperFanJoinEvent is not None:
+                    @self.client.on(SuperFanJoinEvent)
+                    async def on_super_fan_join(event: SuperFanJoinEvent):
+                        """Super fã entrou na live (SuperFanJoinEvent)."""
+                        try:
+                            user_obj = getattr(event, 'user', None)
+                            author = "Usuário"
+                            if user_obj:
+                                author = (getattr(user_obj, 'nickname', None)
+                                          or getattr(user_obj, 'nick_name', None)
+                                          or "Usuário")
+
+                            avatar_html = ''
+                            if user_obj:
+                                avatar_html = await _get_avatar_b64(user_obj)
+                            author_display = f"{avatar_html}{author}" if avatar_html else author
+
+                            fan_icon_path = resource_path('assets/tiktok_fan.svg').replace('\\', '/')
+                            fan_icon = (f"<img src='file:///{fan_icon_path}' "
+                                        f"width='18' height='18' "
+                                        f"style='vertical-align:middle;margin-right:3px;'>")
+                            msg = get_translation("super_fan_joined", self.language, fan_icon)
+                            self.message_received.emit(author_display, msg, "tiktok_event")
+                        except Exception as e:
+                            print(f"⚠️ on_super_fan_join erro: {e}")
+
+                if RoomNotifyEvent is not None:
+                    @self.client.on(RoomNotifyEvent)
+                    async def on_room_notify(event: RoomNotifyEvent):
+                        """Notificações de sala: conquistas, minutos assistidos, etc. (RoomNotifyEvent)."""
+                        try:
+                            user_obj = getattr(event, 'user', None)
+                            author = "Usuário"
+                            if user_obj:
+                                author = (getattr(user_obj, 'nickname', None)
+                                          or getattr(user_obj, 'nick_name', None)
+                                          or "Usuário")
+
+                            # O conteúdo vem no campo 'content' como texto plano
+                            content = str(getattr(event, 'content', '') or '').strip()
+                            if not content:
+                                return  # Sem conteúdo, ignora
+
+                            # Filtra HTML cru e padrões proto que não são mensagens reais
+                            skip_patterns = ['<img', 'Text(key=', 'TextFormat', 'display_type', 'schema=']
+                            if any(p in content for p in skip_patterns):
+                                return
+
+                            avatar_html = ''
+                            if user_obj:
+                                avatar_html = await _get_avatar_b64(user_obj)
+                            author_display = f"{avatar_html}{author}" if avatar_html else author
+
+                            # Ícone genérico de notificação (estrela/conquista)
+                            star_path = resource_path('assets/tiktok_fan.svg').replace('\\', '/')
+                            star_icon = (f"<img src='file:///{star_path}' "
+                                         f"width='16' height='16' "
+                                         f"style='vertical-align:middle;margin-right:3px;'>")
+
+                            msg = f"{star_icon} {content}"
+                            self.message_received.emit(author_display, msg, "tiktok_event")
+                        except Exception as e:
+                            print(f"⚠️ on_room_notify erro: {e}")
+
+                @self.client.on(LikeEvent)
+                async def on_like(event: LikeEvent):
+                    pass
 
                 @self.client.on(JoinEvent)
                 async def on_join(event: JoinEvent):
@@ -814,10 +1091,11 @@ class TikTokHandler(BaseChatHandler):
                     # Marca o timestamp de conexão para backup do uptime
                     self._start_ts = int(time.time())
                     
-                    # Popula o cache de ícones
-                    await _build_gift_cache()
-                    
-                    # FIX #4 + #5: Busca room_info para inicializar uptime E likes corretamente
+                    # Dispara busca de presentes e detalhes da sala em background sem travar o on_connect
+                    asyncio.create_task(_build_gift_cache())
+                    asyncio.create_task(_init_room_details())
+
+                async def _init_room_details():
                     try:
                         rid = getattr(self.client, 'room_id', None)
                         r_dict = await self.client.web.fetch_room_info(room_id=rid)
@@ -831,54 +1109,168 @@ class TikTokHandler(BaseChatHandler):
                                         ct = room.get('create_time') or room.get('createTime')
                                 if ct:
                                     ts = int(ct)
-                                    # Normaliza milissegundos → segundos
                                     if ts > 9_999_999_999:
                                         ts //= 1000
                                     self._create_time = ts
                                     self._room_info_fetched = True
                                     print(f"✅ Uptime sincronizado no ConnectEvent! (ts={ts})")
 
-                            # --- FIX #4: Likes iniciais (total_like_count) ---
-                            # Tenta extrair a contagem de likes atual da sala
-                            # para não exibir 0 enquanto ninguém dá like ao vivo
+                            # --- Likes iniciais ---
                             if self._total_likes == 0:
-                                try:
-                                    # Campo mais comum na resposta da room_info
-                                    likes_val = (
-                                        r_dict.get('like_count')
-                                        or r_dict.get('total_like_count')
-                                        or r_dict.get('likeCount')
-                                    )
-                                    if not likes_val:
-                                        room_obj = r_dict.get('room', r_dict.get('data', {}).get('room', {}))
-                                        if isinstance(room_obj, dict):
-                                            likes_val = (
-                                                room_obj.get('like_count')
-                                                or room_obj.get('total_like_count')
-                                                or room_obj.get('likeCount')
-                                            )
-                                    if not likes_val:
-                                        stats_obj = r_dict.get('stats', r_dict.get('data', {}).get('stats', {}))
-                                        if isinstance(stats_obj, dict):
-                                            likes_val = stats_obj.get('likeCount') or stats_obj.get('like_count') or stats_obj.get('total_like_count')
-                                            
-                                    if not likes_val:
-                                        # Tentar do internal info
-                                        internal_info = getattr(self.client, 'room_info', None)
-                                        if internal_info:
-                                            likes_val = getattr(internal_info, 'like_count', getattr(internal_info, 'likeCount', getattr(internal_info, 'total_like_count', None)))
-                                            
-                                    if likes_val:
-                                        self._total_likes = int(likes_val)
-                                        print(f"✅ Likes iniciais carregados: {self._total_likes}")
-                                        # Emitir stats iniciais com likes corretos
-                                        viewers = getattr(self.client, 'viewer_count', 0)
-                                        uptime_s = max(0, int(time.time()) - (self._create_time or int(time.time())))
-                                        self.stats_updated.emit(viewers, uptime_s, self._total_likes, getattr(self, '_total_views', 0))
-                                except Exception as e_likes:
-                                    print(f"⚠️ Não foi possível carregar likes iniciais: {e_likes}")
+                                likes_val = (
+                                    r_dict.get('like_count')
+                                    or r_dict.get('total_like_count')
+                                    or r_dict.get('likeCount')
+                                )
+                                if not likes_val:
+                                    room_obj = r_dict.get('room', r_dict.get('data', {}).get('room', {}))
+                                    if isinstance(room_obj, dict):
+                                        likes_val = (
+                                            room_obj.get('like_count')
+                                            or room_obj.get('total_like_count')
+                                            or room_obj.get('likeCount')
+                                        )
+                                if not likes_val:
+                                    stats_obj = r_dict.get('stats', r_dict.get('data', {}).get('stats', {}))
+                                    if isinstance(stats_obj, dict):
+                                        likes_val = stats_obj.get('likeCount') or stats_obj.get('like_count') or stats_obj.get('total_like_count')
+                                if likes_val:
+                                    self._total_likes = int(likes_val)
+                                    print(f"✅ Likes iniciais carregados: {self._total_likes}")
+                                    viewers = getattr(self.client, 'viewer_count', 0)
+                                    uptime_s = max(0, int(time.time()) - (self._create_time or int(time.time())))
+                                    self.stats_updated.emit(viewers, uptime_s, self._total_likes, getattr(self, '_total_views', 0))
+
+                            # Extrai IDs do streamer para sincronização contínua de espectadores
+                            owner = r_dict.get('owner', {}) if isinstance(r_dict, dict) else {}
+                            self._anchor_id = owner.get('id', '') or owner.get('id_str', '')
+                            self._sec_anchor_id = owner.get('sec_uid', '')
+                            if self._anchor_id:
+                                self._sync_task = asyncio.create_task(_sync_online_audience_loop())
                     except Exception as e_room:
                         print(f"⚠️ Erro ao buscar room_info no connect: {e_room}")
+
+                async def _sync_online_audience_loop():
+                    """Busca a lista completa de todos os espectadores online via webcast API.
+
+                    Requer autenticação TikTok (sessionid). Se não houver sessionid,
+                    o loop encerra imediatamente sem fazer nenhuma requisição ao TikTok,
+                    evitando erros 401/403/429.
+                    """
+                    # Early-exit: sem sessionid, a API /online_audience/ requer login.
+                    # Não fazemos NENHUMA requisição para não arriscar 429 ou banimento.
+                    if not session_id:
+                        print(
+                            "ℹ️ [Espectadores] Sem login TikTok — aba de usuários online desativada. "
+                            "Faça login em Configurações → TikTok para ativar.",
+                            flush=True
+                        )
+                        return  # Para completamente — sem loop, sem requisições
+
+                    while self.is_running and self._already_connected:
+                        try:
+                            rid = getattr(self.client, 'room_id', None)
+                            if rid and getattr(self, '_anchor_id', None):
+                                url = f"https://webcast.tiktok.com/webcast/ranklist/online_audience/?aid=1988&device_platform=web_pc&room_id={rid}&anchor_id={self._anchor_id}&sec_anchor_id={getattr(self, '_sec_anchor_id', '')}"
+                                headers = {
+                                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                                    "Referer": f"https://www.tiktok.com/@{self.username}/live"
+                                }
+                                cookies = {'sessionid': session_id}
+                                try:
+                                    async with httpx.AsyncClient(headers=headers, cookies=cookies, timeout=6.0) as hc:
+                                        resp = await hc.get(url)
+
+                                        # Sem autenticação: TikTok retorna 401, 403 ou 200 com dados vazios
+                                        if resp.status_code in (401, 403):
+                                            if not _auth_warned:
+                                                print(
+                                                    "ℹ️ [Espectadores] A aba de usuários online requer login TikTok. "
+                                                    "Faça login em Configurações → TikTok para ver a lista completa.",
+                                                    flush=True
+                                                )
+                                                _auth_warned = True
+                                            await asyncio.sleep(30.0)  # Espera mais antes de tentar de novo
+                                            continue
+
+                                        if resp.status_code == 200:
+                                            try:
+                                                data = resp.json()
+                                            except Exception:
+                                                await asyncio.sleep(4.0)
+                                                continue
+
+                                            d = data.get('data', {})
+                                            ranks = d.get('ranks', [])
+
+                                            # Resposta vazia = não autenticado ou live sem audiência listada
+                                            if not ranks:
+                                                if not _auth_warned and not session_id:
+                                                    print(
+                                                        "ℹ️ [Espectadores] Lista vazia — faça login no TikTok em Configurações "
+                                                        "para ver os espectadores online.",
+                                                        flush=True
+                                                    )
+                                                    _auth_warned = True
+                                                await asyncio.sleep(4.0)
+                                                continue
+
+                                            # Reseta o aviso caso tenha conseguido dados
+                                            _auth_warned = False
+                                            viewers_list = []
+                                            total_in_room = d.get('total', 0)
+
+                                            for idx, rk in enumerate(ranks):
+                                                user = rk.get('user', {})
+                                                if not user:
+                                                    continue
+                                                user_id = str(user.get('id', '') or '')
+                                                nickname = str(user.get('nickname', '') or user.get('nick_name', '') or user.get('display_id', '') or 'Usuário')
+                                                display_id = str(user.get('display_id', '') or user.get('unique_id', '') or '')
+                                                score = rk.get('score', 0)
+                                                rank_num = idx + 1
+
+                                                # Coleta URLs de avatar
+                                                avatar_urls = []
+                                                for av_field in ['avatar_thumb', 'avatar_medium', 'avatar_large', 'avatar_168x168', 'avatar_300x300', 'avatar_jpg']:
+                                                    av_obj = user.get(av_field)
+                                                    if av_obj:
+                                                        if isinstance(av_obj, dict):
+                                                            u_list = av_obj.get('url_list') or av_obj.get('urls_list') or []
+                                                            for u in u_list:
+                                                                if u and u not in avatar_urls:
+                                                                    avatar_urls.append(u)
+                                                        elif isinstance(av_obj, list):
+                                                            for u in av_obj:
+                                                                if u and isinstance(u, str) and u.startswith('http') and u not in avatar_urls:
+                                                                    avatar_urls.append(u)
+                                                        elif isinstance(av_obj, str) and av_obj.startswith('http'):
+                                                            if av_obj not in avatar_urls:
+                                                                avatar_urls.append(av_obj)
+
+                                                avatar_url = avatar_urls[0] if avatar_urls else ''
+
+                                                viewers_list.append({
+                                                    'rank': rank_num,
+                                                    'user_id': user_id,
+                                                    'nickname': nickname,
+                                                    'display_id': display_id,
+                                                    'score': score,
+                                                    'avatar_url': avatar_url,
+                                                    'avatar_urls': avatar_urls,
+                                                    'total_online': total_in_room
+                                                })
+
+                                            if viewers_list and self.is_running and self._already_connected:
+                                                self.viewers_list_updated.emit(viewers_list)
+
+                                except httpx.TimeoutException:
+                                    pass  # Timeout de rede — tenta de novo no próximo ciclo
+                                except httpx.RequestError:
+                                    pass  # Erro de conexão — tenta de novo no próximo ciclo
+                        except Exception:
+                            pass
+                        await asyncio.sleep(4.0)
 
                 @self.client.on(DisconnectEvent)
                 async def on_disconnect(event: DisconnectEvent):
@@ -894,7 +1286,7 @@ class TikTokHandler(BaseChatHandler):
                 )
                 self._loop_task = await self.client.start()
                 try:
-                    await asyncio.wait_for(self._connected_event.wait(), timeout=20.0)
+                    await asyncio.wait_for(self._connected_event.wait(), timeout=35.0)
                 except asyncio.TimeoutError:
                     if self.is_running:
                         self.status_changed.emit(False)
@@ -932,7 +1324,24 @@ class TikTokHandler(BaseChatHandler):
                         msg = get_translation("tiktok_rate_limited", self.language, username=self.username, error=str(e)[:100])
                         self.message_received.emit(get_translation("tiktok_connect_attempt", self.language), msg, "system")
                     self.is_running = False
-                elif "offline" in error_str or "not found" in error_str or "room_id" in error_str or "has ended" in error_str or "is over" in error_str:
+                elif ("not capable" in error_str
+                      or "never gone live" in error_str
+                      or "not going live" in error_str
+                      or "does not exist" in error_str
+                      or "not found" in error_str
+                      or "userunavailable" in error_str):
+                    # Usuário não existe ou nunca foi ao vivo — não adianta reconectar
+                    if self.is_running:
+                        self.status_changed.emit(False)
+                        msg = get_translation("tiktok_not_found", self.language, username=self.username)
+                        self.message_received.emit(get_translation("tiktok_connect_attempt", self.language), msg, "system")
+                    self.is_running = False
+                elif ("offline" in error_str
+                      or "room_id" in error_str
+                      or "has ended" in error_str
+                      or "is over" in error_str
+                      or "live has ended" in error_str):
+                    # Canal existe mas está offline no momento
                     if self.is_running:
                         self.status_changed.emit(False)
                         msg = get_translation("tiktok_offline", self.language, username=self.username)
@@ -962,6 +1371,14 @@ class TikTokHandler(BaseChatHandler):
 
     def stop(self):
         self.is_running = False
+        self._already_connected = False
+        if hasattr(self, '_online_viewers_map'):
+            self._online_viewers_map.clear()
+
+        if getattr(self, '_sync_task', None) and not self._sync_task.done():
+            if getattr(self, 'loop', None):
+                self.loop.call_soon_threadsafe(self._sync_task.cancel)
+
         if getattr(self, 'loop', None):
             if getattr(self, '_loop_task', None) and not self._loop_task.done():
                 self.loop.call_soon_threadsafe(self._loop_task.cancel)
@@ -971,7 +1388,6 @@ class TikTokHandler(BaseChatHandler):
                 if asyncio.iscoroutinefunction(self.client.disconnect):
                     asyncio.run_coroutine_threadsafe(self.client.disconnect(), self.loop)
                 else:
-                    # Pode ser que client.disconnect não seja corotina em algumas versões do TikTokLive
                     self.client.disconnect()
             except Exception as e:
                 print(f"⚠️ Erro ao parar TikTok: {e}")

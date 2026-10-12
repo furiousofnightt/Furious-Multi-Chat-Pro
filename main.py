@@ -3,11 +3,17 @@ import signal
 import os
 import traceback
 
-
+# Silenciar avisos internos de fontes e scripts raros do Qt (ex: tailandês/cirílico)
+# DEVE ficar ANTES de qualquer import do PyQt6 para ter efeito
+os.environ["QT_LOGGING_RULES"] = "qt.text.font.db.warning=false;qt.text.font.db.debug=false"
 
 from PyQt6.QtWidgets import QApplication
 from PyQt6.QtGui import QFontDatabase
 from PyQt6.QtCore import QTimer, Qt
+
+import logging
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpcore").setLevel(logging.WARNING)
 
 # Necessário ser definido ANTES de criar o QApplication para o WebEngine funcionar,
 # mas sem carregar o Chromium no startup (carregamento lazy quando a janela de login abre)
@@ -54,8 +60,10 @@ def main():
     timer.timeout.connect(lambda: None)
     
     settings = SettingsManager()
-    window = ChatWindow()
-    window.settings_manager = settings  # Injeta para toggle_pin salvar
+    window = ChatWindow(settings_manager=settings)
+    if hasattr(window, 'viewers_page') and window.viewers_page:
+        window.viewers_page._settings_manager = settings
+        window.viewers_page.refresh_state()
     chat_manager = ChatManager(settings, window)
     
     # --- HOTKEY MANAGER ---
@@ -95,6 +103,8 @@ def main():
             # Sempre avalia mudanças visuais em tempo real sem precisar reconectar chat
             window.setWindowOpacity(settings.settings.get("opacity", 0.85))
             window.apply_theme(settings.settings)
+            if hasattr(window, 'viewers_page') and window.viewers_page:
+                window.viewers_page.refresh_state()
             
             # Re-registra hotkeys com as novas combinações salvas
             hotkey_manager.start()

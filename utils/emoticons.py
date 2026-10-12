@@ -334,15 +334,19 @@ def convert_emoticons(text):
     """
     import re
 
-    # --- Passo 1: Extrair e proteger URLs ---
-    # Substitui cada URL por um token temporário único
-    url_pattern = re.compile(r'https?://[^\s<>"\']+|www\.[^\s<>"\']+', re.IGNORECASE)
-    urls = []
-    def _protect_url(m):
-        placeholder = f"\x00URL{len(urls)}\x00"
-        urls.append(m.group(0))
-        return placeholder
-    protected = url_pattern.sub(_protect_url, text)
+    # --- Passo 1: Extrair e proteger Tags HTML e URLs ---
+    protected_tokens = []
+    def _protect(m):
+        tok = f"\x00PROTECT_{len(protected_tokens)}\x00"
+        protected_tokens.append(m.group(0))
+        return tok
+
+    # Protege tags HTML completas, URLs web, URLs de arquivo local file:/// e data: URIs
+    pattern_protect = re.compile(
+        r'<[^>]+>|https?://[^\s<>"\']+|www\.[^\s<>"\']+|file:///[^\s<>"\']+|data:[^\s<>"\']+',
+        re.IGNORECASE
+    )
+    protected = pattern_protect.sub(_protect, text)
 
     # --- Passo 2: Aplicar emotes ---
     for code, emoji in EMOTICONS_MAP.items():
@@ -351,14 +355,12 @@ def convert_emoticons(text):
             protected = protected.replace(code, emoji)
         else:
             # Emotes alfanuméricos: usa word boundary para não afetar substrings
-            # (?<!\w) e (?!\w) garantem que só substitui palavras isoladas,
-            # mesmo quando o código começa ou termina com caractere não-letra
             pattern = r'(?<!\w)' + re.escape(code) + r'(?!\w)'
             protected = re.sub(pattern, emoji, protected)
 
-    # --- Passo 3: Restaurar URLs ---
-    for i, url in enumerate(urls):
-        protected = protected.replace(f"\x00URL{i}\x00", url)
+    # --- Passo 3: Restaurar tokens protegidos ---
+    for i, tok in enumerate(protected_tokens):
+        protected = protected.replace(f"\x00PROTECT_{i}\x00", tok)
 
     return protected
 

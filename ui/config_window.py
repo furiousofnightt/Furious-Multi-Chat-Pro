@@ -3,6 +3,7 @@ from PyQt6.QtGui import QColor, QIcon, QFont, QKeySequence
 from PyQt6.QtCore import Qt, pyqtSignal, QSize, QEvent, QObject
 from utils.translations import get_translation, get_available_languages, get_language_display_name
 from utils.resource_path import resource_path
+from ui.main_window import FlowLayout, HeightAwareWidget
 import os
 
 # Helper para recursos
@@ -121,11 +122,6 @@ class TagWidget(QWidget):
             }
             TagWidget:hover { background-color: #555; border: 1px solid #888; }
         """)
-
-class FlowLayout(QVBoxLayout):
-    # Simplificação: Usaremos um QHBoxLayout que permite Wrap ou apenas uma lista vertical limpa
-    # Mas para "profisisonal", vamos fazer um container de tags real.
-    pass
 
 class ConfigWindow(QDialog):
     def __init__(self, settings_manager, main_window, chat_manager=None):
@@ -267,7 +263,29 @@ class ConfigWindow(QDialog):
         self.tts_enable_check = QCheckBox("Ativar Leitura de Chat (TTS)")
         self.tts_enable_check.setChecked(self.settings_manager.settings.get("tts_enabled", True))
         left_layout.addWidget(self.tts_enable_check)
-        
+
+        # --- Seletor de Motor de Voz ---
+        engine_row = QHBoxLayout()
+        engine_lbl = QLabel("Motor de Voz:")
+        engine_lbl.setStyleSheet("font-weight: bold; color: #ccc;")
+        engine_row.addWidget(engine_lbl)
+        self.combo_tts_engine = QComboBox()
+        self.combo_tts_engine.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        self.combo_tts_engine.installEventFilter(_wheel_ignore)
+        self.combo_tts_engine.addItem("Microsoft Edge (Neural)", "edge")
+        self.combo_tts_engine.addItem("Google TTS (Alternativo)", "google")
+        current_engine = self.settings_manager.settings.get("tts_engine", "edge")
+        idx_engine = self.combo_tts_engine.findData(current_engine)
+        if idx_engine >= 0:
+            self.combo_tts_engine.setCurrentIndex(idx_engine)
+        engine_row.addWidget(self.combo_tts_engine)
+        left_layout.addLayout(engine_row)
+
+        self._google_info_label = QLabel("Google: voz unica (pt-BR), ignora selecao de voz por plataforma")
+        self._google_info_label.setStyleSheet("color: #facc15; font-size: 10px; margin-left: 4px;")
+        self._google_info_label.setWordWrap(True)
+        left_layout.addWidget(self._google_info_label)
+
         vol_row = QHBoxLayout()
         vol_row.addWidget(QLabel("Volume da Voz"))
         self.tts_volume_slider = QSlider(Qt.Orientation.Horizontal)
@@ -289,8 +307,11 @@ class ConfigWindow(QDialog):
         ]
         
         def create_voice_combo(platform_name, config_key, default_voice):
-            row = QHBoxLayout()
-            
+            # Encapsula em QWidget para poder mostrar/ocultar o bloco inteiro
+            container = QWidget()
+            row = QHBoxLayout(container)
+            row.setContentsMargins(0, 0, 0, 0)
+
             # Checkbox da plataforma
             check_key = f"tts_enabled_{platform_name.lower()}"
             check = QCheckBox(platform_name)
@@ -298,30 +319,49 @@ class ConfigWindow(QDialog):
             check.setFixedWidth(85)
             row.addWidget(check)
             setattr(self, f"check_{platform_name.lower()}", check)
-            
+
             combo = QComboBox()
             combo.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
             combo.installEventFilter(_wheel_ignore)
             for name, code in self.voices_list:
                 combo.addItem(name, code)
-            
+
             current_voice = self.settings_manager.settings.get(config_key, default_voice)
             index = combo.findData(current_voice)
             if index >= 0:
                 combo.setCurrentIndex(index)
-                
+
             row.addWidget(combo)
-            return combo, row
-            
+            return combo, container
+
         self.combo_twitch, row_tw = create_voice_combo("Twitch", "tts_voice_twitch", "pt-BR-AntonioNeural")
         self.combo_tiktok, row_tt = create_voice_combo("TikTok", "tts_voice_tiktok", "pt-BR-FranciscaNeural")
         self.combo_kick, row_kk = create_voice_combo("Kick", "tts_voice_kick", "pt-BR-ThalitaMultilingualNeural")
         self.combo_youtube, row_yt = create_voice_combo("YouTube", "tts_voice_youtube", "pt-BR-AntonioNeural")
-        
-        left_layout.addLayout(row_tw)
-        left_layout.addLayout(row_tt)
-        left_layout.addLayout(row_kk)
-        left_layout.addLayout(row_yt)
+
+        self._voice_combo_rows = [row_tw, row_tt, row_kk, row_yt]
+
+        left_layout.addWidget(row_tw)
+        left_layout.addWidget(row_tt)
+        left_layout.addWidget(row_kk)
+        left_layout.addWidget(row_yt)
+
+        # Conecta o motor ao show/hide dos combos e aviso
+        def on_engine_changed(_idx):
+            is_google = self.combo_tts_engine.currentData() == "google"
+            self._google_info_label.setVisible(is_google)
+            for w in self._voice_combo_rows:
+                w.setVisible(not is_google)
+
+        self.combo_tts_engine.currentIndexChanged.connect(on_engine_changed)
+
+        # Aplica visibilidade inicial
+        _init_google = current_engine == "google"
+        self._google_info_label.setVisible(_init_google)
+        for _w in self._voice_combo_rows:
+            _w.setVisible(not _init_google)
+
+
 
         left_layout.addWidget(QLabel(get_translation("language_label", lang)))
         self.lang_combo = QComboBox()
@@ -370,9 +410,9 @@ class ConfigWindow(QDialog):
         panels_layout.addWidget(left_scroll, 1)
 
         # ── PAINEL DIREITO: Aparência + Blacklist + Hotkeys ──────────────────
-        right_panel = QFrame()
-        right_panel.setObjectName("panel")
-        right_layout = QVBoxLayout(right_panel)
+        right_content = QWidget()
+        right_content.setObjectName("right_content")
+        right_layout = QVBoxLayout(right_content)
         right_layout.setContentsMargins(14, 14, 14, 14)
         right_layout.setSpacing(6)
 
@@ -424,17 +464,20 @@ class ConfigWindow(QDialog):
         right_layout.addWidget(sep2)
         section_label(get_translation("blacklist_label", lang), right_layout, "icon_shield.svg")
 
-        self.tags_container = QFrame()
+        self.tags_container = HeightAwareWidget()
+        self.tags_container.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.tags_container.setStyleSheet("background-color: #1e1e1e; border-radius: 4px; border: 1px solid #444;")
-        self.tags_layout = QHBoxLayout(self.tags_container)
-        self.tags_layout.setContentsMargins(5, 5, 5, 5)
-        self.tags_layout.setSpacing(5)
-        self.tags_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
-        bl_scroll = QScrollArea()
-        bl_scroll.setWidgetResizable(True)
-        bl_scroll.setWidget(self.tags_container)
-        bl_scroll.setFixedHeight(46)
-        right_layout.addWidget(bl_scroll)
+        self.tags_container.setMinimumHeight(40)
+        
+        self.tags_layout = FlowLayout(self.tags_container, 5, 5)
+        
+        self.bl_scroll = QScrollArea()
+        self.bl_scroll.setWidgetResizable(True)
+        self.bl_scroll.setWidget(self.tags_container)
+        self.bl_scroll.setStyleSheet("QScrollArea { border: none; background: transparent; }")
+        self.bl_scroll.setMinimumHeight(46)
+        self.bl_scroll.setMaximumHeight(150)
+        right_layout.addWidget(self.bl_scroll)
 
         self.blacklist_input = QLineEdit()
         self.blacklist_input.setPlaceholderText(get_translation("blacklist_placeholder", lang))
@@ -529,7 +572,39 @@ class ConfigWindow(QDialog):
         right_layout.addLayout(tiktok_login_row)
 
         right_layout.addStretch()
-        panels_layout.addWidget(right_panel, 1)
+
+        right_scroll = QScrollArea()
+        right_scroll.setObjectName("panel")
+        right_scroll.setWidget(right_content)
+        right_scroll.setWidgetResizable(True)
+        right_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        right_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        right_scroll.setStyleSheet("""
+            QScrollArea#panel {
+                background-color: #242424;
+                border: 1px solid #333;
+                border-radius: 8px;
+            }
+            QWidget#right_content {
+                background-color: #242424;
+            }
+            QScrollBar:vertical {
+                background: #2e2e2e;
+                width: 6px;
+                border-radius: 3px;
+            }
+            QScrollBar::handle:vertical {
+                background: #555;
+                border-radius: 3px;
+            }
+            QScrollBar::handle:vertical:hover {
+                background: #007acc;
+            }
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+                height: 0px;
+            }
+        """)
+        panels_layout.addWidget(right_scroll, 1)
         self.layout.addLayout(panels_layout)
 
         # ── BOTÕES INFERIORES (largura total) ─────────────────────────────────
@@ -599,11 +674,18 @@ class ConfigWindow(QDialog):
         msg_box.setIcon(QMessageBox.Icon.Information)
         msg_box.setText(
             "<b>O login no TikTok é opcional.</b><br><br>"
-            "Ele é necessário <b>apenas</b> se você quiser que o cronômetro mostre o tempo total da live "
-            "em transmissões com restrição de idade (+18) ou caso você conecte atrasado.<br><br>"
-            "Sem o login, o relógio do chat começará sempre do <b>00:00:00</b> no momento em que você conectar.<br><br>"
+
+            "<b>🕐 Cronômetro preciso:</b> Necessário para o relógio mostrar o tempo total da live "
+            "em transmissões com restrição de idade (+18) ou caso você conecte atrasado. "
+            "Sem o login, o relógio começa sempre do <b>00:00:00</b> no momento em que você conectar.<br><br>"
+
+            "<b>👥 Aba de Espectadores Online:</b> Com o login ativo, uma aba dedicada exibe "
+            "em tempo real <b>todos os usuários presentes na sua live</b> — com foto de perfil, "
+            "nome, @username e pontos de contribuição. "
+            "Ideal para agradecer a todos no encerramento da live lendo os nomes.<br><br>"
+
             "<b>Recomendado:</b> use uma conta secundária do TikTok para login, nunca a conta principal.<br><br>"
-            "<i>🔒 <b>Sua Privacidade:</b> Não salvamos sua senha. Os dados de login ficam apenas neste computador, em um arquivo local.</i>"
+            "<i>🔒 <b>Sua Privacidade:</b> Não salvamos sua senha. Os dados de login ficam apenas neste computador, em um arquivo local criptografado pelo próprio windows.</i>"
         )
         btn_continuar = msg_box.addButton("Continuar", QMessageBox.ButtonRole.AcceptRole)
         btn_cancelar = msg_box.addButton("Cancelar", QMessageBox.ButtonRole.RejectRole)
@@ -646,7 +728,20 @@ class ConfigWindow(QDialog):
         line_edit = QLineEdit()
         line_edit.setMinimumWidth(180)
         line_edit.setSizePolicy(line_edit.sizePolicy().horizontalPolicy(), line_edit.sizePolicy().verticalPolicy())
-        line_edit.setText(self.settings_manager.settings.get(key, ""))
+        # Dica visual de formato esperado para cada plataforma (sem @ para evitar erro)
+        placeholders = {
+            "tiktok":   "SeuArrobaAqui (sem @)",
+            "twitch":   "SeuArrobaAqui (sem @)",
+            "kick":     "SeuArrobaAqui (sem @)",
+            "youtube":  "SeuArrobaAqui (sem @)",
+        }
+        if key in placeholders:
+            line_edit.setPlaceholderText(placeholders[key])
+        saved_val = self.settings_manager.settings.get(key, "")
+        # Garantir que valor salvo do TikTok não tem @ (limpeza retroativa)
+        if key == "tiktok" and saved_val.startswith("@"):
+            saved_val = saved_val.lstrip("@")
+        line_edit.setText(saved_val)
         setattr(self, f"{key}_input", line_edit)
         
         # Botão de reconectar
@@ -691,6 +786,10 @@ class ConfigWindow(QDialog):
     def _reconnect_platform(self, platform):
         # Salvar as configs atuais do input para garantir que vai conectar com o username digitado
         username_input = getattr(self, f"{platform}_input").text().strip()
+        # TikTok: remover @ automaticamente se o usuário digitou (ex: @furiousofnight -> furiousofnight)
+        if platform == "tiktok" and username_input.startswith("@"):
+            username_input = username_input.lstrip("@")
+            getattr(self, f"{platform}_input").setText(username_input)
         self.settings_manager.settings[platform] = username_input
         self.settings_manager.save_settings()
         
@@ -757,6 +856,7 @@ class ConfigWindow(QDialog):
         
         self.settings_manager.settings["tts_enabled"] = self.tts_enable_check.isChecked()
         self.settings_manager.settings["tts_volume"] = self.tts_volume_slider.value()
+        self.settings_manager.settings["tts_engine"] = self.combo_tts_engine.currentData()
         
         self.settings_manager.settings["tts_enabled_twitch"] = self.check_twitch.isChecked()
         self.settings_manager.settings["tts_enabled_tiktok"] = self.check_tiktok.isChecked()
@@ -775,7 +875,7 @@ class ConfigWindow(QDialog):
         self.settings_manager.settings["font_size"] = self.font_size_slider.value()
         self.settings_manager.settings["platform_colors"] = self.platform_colors
         
-        self.settings_manager.settings["blacklist"] = self.tags
+        self.settings_manager.settings["blacklist"] = list(self.tags)
         
         # Salva hotkeys
         self.settings_manager.settings["hotkey_toggle_visibility"] = self.hotkey_toggle_field.text().strip() or "ctrl+shift+h"

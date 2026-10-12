@@ -5,6 +5,7 @@ class BaseChatHandler(QObject):
     user_joined = pyqtSignal(str, str)           # (username, platform)
     status_changed = pyqtSignal(bool)            # (connected)
     stats_updated = pyqtSignal(int, int, int, int)     # (viewers, uptime_seconds, likes, total_views)
+    viewers_list_updated = pyqtSignal(list)             # list of viewer dicts
     
     def __init__(self, username):
         super().__init__()

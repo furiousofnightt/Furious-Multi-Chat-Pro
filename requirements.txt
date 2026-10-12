@@ -12,3 +12,4 @@ edge-tts
 pygame-ce
 curl_cffi
 pywin32
+gtts

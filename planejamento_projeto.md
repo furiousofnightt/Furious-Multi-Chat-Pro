@@ -63,6 +63,9 @@ O objetivo é criar uma alternativa superior ao TransparentTwitchChat, com supor
 2.  Criação do instalador usando Inno Setup ou similar.
 3.  Testes de compatibilidade em Windows 10/11.
 
-## 5. Próximos Passos
-1.  Aprovação deste plano pelo usuário.
-2.  Início da Fase 1 (Interface Base).
+### Fase 6: Aba de Audiência Online & Enriquecimento de Eventos
+1.  **Aba de Espectadores Online**: Integração contínua com a Webcast API (`online_audience`) exibindo 100% dos espectadores logados.
+2.  **Numeração e Ranking**: Numeração contínua (`#1` a `#N`) abrangendo todos os participantes da live (inclusive 0 pontos).
+3.  **Controle de Fonte Dinâmico**: Botões `A-` e `A+` para redimensionamento em tempo real dos cards de usuários.
+4.  **Enriquecimento Visual**: Avatares de perfil e badges adicionados em eventos de presentes, novos seguidores e compartilhamentos.
+5.  **Proteções de Autenticação**: Zero requisições sem login para evitar erros 429/403, cards visuais informativos e limpeza automática do chat ao remover o streamer.

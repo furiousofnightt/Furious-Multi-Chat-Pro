@@ -42,6 +42,7 @@ def build_exe():
         '--hidden-import=betterproto',
         '--hidden-import=pyee',
         '--hidden-import=typing_extensions',
+        '--hidden-import=TikTokLive',
         '--hidden-import=PyQt6.QtCore',
         '--hidden-import=PyQt6.QtGui',
         '--hidden-import=PyQt6.QtWidgets',
@@ -55,10 +56,18 @@ def build_exe():
         '--hidden-import=PyQt6.QtWebEngineWidgets',
         '--hidden-import=PyQt6.QtWebEngineCore',
         '--hidden-import=win32crypt',
+        '--hidden-import=gtts',
+        '--hidden-import=gtts.tts',
+        '--hidden-import=gtts.lang',
+        '--hidden-import=requests',
+        '--hidden-import=urllib3',
+        '--hidden-import=charset_normalizer',
+        '--hidden-import=click',
 
         # Inclui as DLLs e recursos do WebEngine no executável
         '--collect-all=PyQt6.QtWebEngineWidgets',
         '--collect-all=PyQt6.QtWebEngineCore',
+        '--collect-all=gtts',
 
         # Incluir pastas externas (Dados)
         '--add-data=ui;ui',

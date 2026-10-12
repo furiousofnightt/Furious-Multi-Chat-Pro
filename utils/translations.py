@@ -42,7 +42,8 @@ TRANSLATIONS = {
         "tiktok_connected": "Conectado ao TikTok: {username}",
         "tiktok_disconnected": "Conexão com TikTok encerrada. Tentando reconectar...",
         "tiktok_error": "TikTok desconectado ({error}).",
-        "tiktok_offline": "Canal do TikTok '@{username}' está offline ou não foi encontrado.",
+        "tiktok_offline": "📴 TikTok: Canal '@{username}' está offline no momento. Parando reconexão.",
+        "tiktok_not_found": "❌ TikTok: Usuário '@{username}' não encontrado ou nunca foi ao vivo. Verifique o nome digitado.",
         "tiktok_rate_limited": "⚠️ RATE LIMIT ATIVADO para {username}!\nLimite de requisições foi excedido.\nAguarde ~16-24 horas para tentar novamente.\nErro: {error}",
         
         
@@ -58,7 +59,12 @@ TRANSLATIONS = {
         "follow_started": "<img src='follow.svg' width='18' height='18'> começou a seguir!",
         "share_transmitted": "<img src='share.svg' width='18' height='18'> compartilhou a transmissão!",
         "user_joined": "{} entrou na live!",
-        
+        # Novos eventos: fã-clube, super fã, conquistas
+        "fan_club_joined": "{} entrou para o Fã-clube! 🎉",
+        "fan_club_months": "{} {} no Fã-clube! 🎂",
+        "super_fan_became": "{} se tornou Super Fã! ⭐",
+        "super_fan_joined": "{} (Super Fã) entrou na live! ⭐",
+
         # System Messages - General
         "system_label": "Sistema",
         "chat_cleared": "Chat limpo!",
@@ -113,7 +119,8 @@ TRANSLATIONS = {
         "tiktok_connected": "Connected to TikTok: {username}",
         "tiktok_disconnected": "TikTok connection closed. Attempting to reconnect...",
         "tiktok_error": "TikTok disconnected ({error}).",
-        "tiktok_offline": "TikTok channel '@{username}' is offline or could not be found.",
+        "tiktok_offline": "📴 TikTok: Channel '@{username}' is currently offline. Stopping reconnection.",
+        "tiktok_not_found": "❌ TikTok: User '@{username}' was not found or has never gone live. Please check the username.",
         "tiktok_rate_limited": "⚠️ RATE LIMIT ACTIVATED for {username}!\nRequest limit exceeded.\nWait ~16-24 hours to try again.\nError: {error}",
         
         
@@ -129,7 +136,12 @@ TRANSLATIONS = {
         "follow_started": "<img src='follow.svg' width='18' height='18'> followed!",
         "share_transmitted": "<img src='share.svg' width='18' height='18'> shared the stream!",
         "user_joined": "{} joined the live!",
-        
+        # New events: fan club, super fan, achievements
+        "fan_club_joined": "{} joined the Fan Club! 🎉",
+        "fan_club_months": "{} {} in the Fan Club! 🎂",
+        "super_fan_became": "{} became a Super Fan! ⭐",
+        "super_fan_joined": "{} (Super Fan) joined the live! ⭐",
+
         # System Messages - General
         "system_label": "System",
         "chat_cleared": "Chat cleared!",

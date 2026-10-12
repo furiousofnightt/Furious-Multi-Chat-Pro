@@ -26,6 +26,9 @@ O **Furious Multi Chat Pro** é uma aplicação desktop de alta performance cria
 ## ✨ Principais Funcionalidades
 
 - **🌐 Chat Multi-Plataforma**: Capture e visualize mensagens do Twitch, TikTok, Kick e YouTube em tempo real em uma única janela.
+- **👥 Aba de Espectadores Online (TikTok)**: Aba dedicada com navegação instantânea para acompanhar em tempo real **todos os espectadores conectados na live** — com foto de perfil circular, nome, @username, pontuação e numeração contínua (`#1` a `#N`).
+- **🔡 Ajuste Dinâmico de Fonte**: Botões rápidos `A-` e `A+` na lista de espectadores para aumentar ou diminuir o tamanho dos nomes e textos em tempo real.
+- **🖼️ Eventos Enriquecidos**: Fotos de perfil e badges integrados em eventos de presentes (`GiftEvent`), novos seguidores (`FollowEvent`) e compartilhamentos (`ShareEvent`).
 - **📊 Estatísticas em Tempo Real**: Painel com viewers online, **total de visualizações acumuladas** (TikTok), uptime da transmissão e curtidas — tudo atualizado ao vivo.
 - **🟢 Status de Conexão Inteligente**: Tooltip nos viewers que exibe o estado real de cada plataforma — "Offline" quando desconectada, "0" quando conectada mas sem espectadores, e o número real quando há viewers.
 - **🎨 Design Premium & Glassmorphism**: Interface moderna, fluida e com suporte a transparência e efeito blur (desfoque nativo do Windows).
@@ -35,7 +38,7 @@ O **Furious Multi Chat Pro** é uma aplicação desktop de alta performance cria
 - **🔔 Notificações Visuais**: Alertas em formato de banner animado quando novos espectadores entram na live.
 - **🛡️ Ferramentas de Moderação**: Sistema de *Blacklist* para censurar automaticamente palavras indesejadas.
 - **⏳ Controle de Leitura**: Sistema de atraso e espaçamento de mensagens para facilitar a leitura em chats muito movimentados.
-- **🗣️ Bot de Voz Neural (TTS)**: Leitura de mensagens com vozes de alta fidelidade (Azure), configuração independente por plataforma e filtro anti-spam.
+- **🗣️ Bot de Voz (TTS) Multi-Motor**: Leitura de mensagens com suporte a **dois motores**: vozes neurais de alta fidelidade (Microsoft Edge/Azure) e **Google TTS alternativo** (estável e imune a bloqueios de token da Microsoft), com configuração por plataforma e filtro anti-spam.
 - **🔒 Segurança de Dados (DPAPI)**: O token de sessão do TikTok é armazenado criptografado no `settings.json` usando a **Windows DPAPI**, vinculado ao usuário do Windows — ilegível por vírus ou outros programas.
 - **🌍 Internacionalização**: Suporte nativo para Português (Brasil) e Inglês.
 
@@ -89,6 +92,7 @@ Na primeira execução, o sistema gerará automaticamente o arquivo `settings.js
         "system": "#333333"
     },
     "tts_enabled": false,
+    "tts_engine": "edge",
     "tts_volume": 100,
     "tts_voice_twitch": "pt-BR-AntonioNeural",
     "tts_voice_tiktok": "pt-BR-FranciscaNeural",

@@ -65,24 +65,33 @@ class SettingsManager:
                 "system": "#333333"
             }
         }
-        if os.path.exists(self.filename):
-            with open(self.filename, 'r', encoding='utf-8') as f:
-                loaded = json.load(f)
-                
-                # Descriptografa tiktok_session_id caso esteja criptografado com DPAPI
-                session = loaded.get("tiktok_session_id", "")
-                if session.startswith("DPAPI:"):
-                    try:
-                        import win32crypt
-                        import base64
-                        encrypted = base64.b64decode(session[6:].encode('utf-8'))
-                        _, decrypted = win32crypt.CryptUnprotectData(encrypted, None, None, None, 0)
-                        loaded["tiktok_session_id"] = decrypted.decode('utf-8')
-                    except Exception as e:
-                        print(f"⚠️ Erro ao descriptografar sessão: {e}")
-                        loaded["tiktok_session_id"] = ""
+        # Tentar carregar do arquivo principal; se corrompido, tenta o backup (.bak)
+        loaded = None
+        for path_to_try in (self.filename, f"{self.filename}.bak"):
+            if os.path.exists(path_to_try):
+                try:
+                    with open(path_to_try, 'r', encoding='utf-8') as f:
+                        loaded = json.load(f)
+                    if loaded:
+                        break
+                except Exception as e:
+                    print(f"⚠️ Falha ao ler {path_to_try}: {e}")
 
-                defaults.update(loaded)
+        if loaded:
+            # Descriptografa tiktok_session_id caso esteja criptografado com DPAPI
+            session = loaded.get("tiktok_session_id", "")
+            if session.startswith("DPAPI:"):
+                try:
+                    import win32crypt
+                    import base64
+                    encrypted = base64.b64decode(session[6:].encode('utf-8'))
+                    _, decrypted = win32crypt.CryptUnprotectData(encrypted, None, None, None, 0)
+                    loaded["tiktok_session_id"] = decrypted.decode('utf-8')
+                except Exception as e:
+                    print(f"⚠️ Erro ao descriptografar sessão: {e}")
+                    loaded["tiktok_session_id"] = ""
+
+            defaults.update(loaded)
         return defaults
 
     def save_settings(self):
@@ -98,6 +107,29 @@ class SettingsManager:
                 to_save["tiktok_session_id"] = "DPAPI:" + base64.b64encode(encrypted).decode('utf-8')
             except Exception as e:
                 print(f"⚠️ Erro ao criptografar sessão: {e}")
-        
-        with open(self.filename, 'w', encoding='utf-8') as f:
-            json.dump(to_save, f, indent=4)
+
+        # 1. Backup de segurança do arquivo anterior
+        bak_file = f"{self.filename}.bak"
+        if os.path.exists(self.filename):
+            try:
+                import shutil
+                shutil.copy2(self.filename, bak_file)
+            except Exception:
+                pass
+
+        # 2. Escrita atômica (grava em .tmp e renomeia) para evitar corrupção por queda de energia
+        tmp_file = f"{self.filename}.tmp"
+        try:
+            with open(tmp_file, 'w', encoding='utf-8') as f:
+                json.dump(to_save, f, indent=4)
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(tmp_file, self.filename)
+        except Exception as e:
+            print(f"⚠️ Erro ao salvar configurações atomicamente: {e}")
+            # Fallback direto caso o replace falhe
+            try:
+                with open(self.filename, 'w', encoding='utf-8') as f:
+                    json.dump(to_save, f, indent=4)
+            except Exception:
+                pass

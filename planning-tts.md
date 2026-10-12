@@ -1,6 +1,124 @@
-# Planejamento: Bot de Voz Neural (TTS) - v4.0
+# Planejamento: Bot de Voz Neural (TTS) - v4.1
 
-Este documento detalha a implementação de um sistema de Text-to-Speech (TTS) de alta fidelidade para o **Furious Multi Chat Pro**, utilizando vozes neurais gratuitas da Microsoft via `edge-tts`. O objetivo é criar um assistente de voz "Plug-and-Play" que seja independente de plataforma e extremamente estável.
+Este documento detalha a implementação do sistema de Text-to-Speech (TTS) do **Furious Multi Chat Pro**. A partir da v4.1, o sistema suporta **dois motores de voz** selecionáveis pelo usuário na interface de configurações.
+
+---
+
+## Arquitetura: O Motor de Voz (`utils/tts_engine.py`)
+
+### Motores Disponíveis
+
+| Motor | Biblioteca | Qualidade | Requer Internet | Vozes por Plataforma |
+|-------|-----------|-----------|-----------------|----------------------|
+| **Microsoft Edge (Neural)** | `edge-tts` | Alta (Neural Azure) | Sim | Sim (Antônio/Francisca/Thalita) |
+| **Google TTS (Alternativo)** | `gtts` | Média (Google Translate) | Sim | Não (pt-BR único) |
+
+### Por que dois motores? — Contexto Histórico e Resolução (out/2026)
+Em outubro de 2026, a Microsoft desativou a síntese WebSocket no endpoint legado `speech.platform.bing.com` (retornando `403 WSServerHandshakeError`), migrando o Edge 155+ para `api.msedgeservices.com/tts/cognitiveservices/websocket/v1`. 
+
+**Resoluções implementadas no Furious Multi Chat Pro:**
+1. **Patch Nativo do Edge TTS**: O `utils/tts_engine.py` redireciona automaticamente o `WSS_URL` para o novo endpoint `api.msedgeservices.com` com `Ocp-Apim-Subscription-Key`, reativando **100% das vozes neurais (Antônio, Francisca e Thalita)** sem esperar nova release do PyPI.
+2. **Google TTS como Contingência Permanente**: O motor `gtts` permanece ativo como alternativa selecionável na interface, garantindo redundância total caso haja qualquer instabilidade futura na infraestrutura da Microsoft.
+
+---
+
+## Dependências Necessárias
+
+- **`edge-tts`**: Motor principal — vozes neurais Microsoft Azure gratuitas via browser spoofing.
+- **`gtts`**: Motor alternativo — Google Translate TTS (voz pt-BR única, estável).
+- **`pygame-ce`**: Reprodução de áudio via `pygame.mixer` com controle de volume independente.
+- **`tempfile`**: Arquivos `.mp3` temporários criados e destruídos automaticamente.
+
+---
+
+## Arquitetura Interna do `TTSManager`
+
+```
+add_message(user, text, platform)
+    → TextCleaner.clean()           # Remove HTML, links, emojis, spam
+    → asyncio.run_coroutine_threadsafe(_download_and_queue)
+        → lê config: tts_engine
+        ├── "edge"   → _download_edge(text, voice)   # Motor Edge original
+        └── "google" → executor(_download_gtts, text) # Motor Google (síncrono em thread)
+    → queue.append(temp_mp3_path)
+    → QTimer(300ms) → _check_queue() → pygame.mixer.Sound.play()
+```
+
+### Proteções Implementadas
+- **Fila anti-raid**: Máximo 10 mensagens em fila + 10 em download simultâneo.
+- **Mute instantâneo**: `Ctrl+M` limpa fila + para áudio atual.
+- **Try-Catch total**: Qualquer falha de rede ou API é silenciada — o chat visual nunca é afetado.
+- **Descarte on-mute**: Se o usuário mutar durante o download, o arquivo é descartado antes de entrar na fila.
+
+---
+
+## Interface de Configurações
+
+Na aba **Voz do Bot (TTS)** em Configurações:
+
+1. **Ativar Leitura de Chat (TTS)** — checkbox global
+2. **Motor de Voz** — combo:
+   - `Microsoft Edge (Neural)` → salva `tts_engine: "edge"`
+   - `Google TTS (Alternativo)` → salva `tts_engine: "google"`
+3. **Volume da Voz** — slider 0–100%
+4. **Vozes por Plataforma** *(visível apenas no modo Edge)*:
+   - Twitch → padrão: Antônio (Masculino)
+   - TikTok → padrão: Francisca (Feminina)
+   - Kick → padrão: Thalita (Feminina)
+   - YouTube → padrão: Antônio (Masculino)
+
+> **Nota**: No modo Google, as vozes por plataforma ficam ocultas automaticamente pois o gTTS usa uma única voz pt-BR.
+
+---
+
+## Funcionalidades de Inteligência (TextCleaner)
+
+- **Filtro de Spam Dinâmico**: `kkkkkk` → `kkk`, `AAAAAAA` → `AAA`
+- **Ignorar Links**: URLs → "link enviado"
+- **Blacklist**: Palavras cadastradas nas configurações são removidas do áudio
+- **Limite de 500 chars**: Segurança para mensagens excessivamente longas
+- **Sanitização SSML**: `&` → ` e `, apóstrofos normalizados
+
+---
+
+## Plano de Execução — Status
+
+### Fase 1: Fundação do Motor ✅ Concluída
+- [x] `utils/tts_engine.py` criado
+- [x] Download assíncrono com `tempfile`
+- [x] Player via `pygame.mixer` com fallback para `pygame.music`
+
+### Fase 2: Interface e Configurações ✅ Concluída
+- [x] Seção "Voz do Bot (TTS)" nas configurações
+- [x] Seletor de motor (Edge / Google) com show/hide dinâmico
+- [x] Controle de volume e vozes por plataforma
+
+### Fase 3: Inteligência e Robustez ✅ Concluída
+- [x] `TextCleaner` com limpeza HTML, links, spam e blacklist
+- [x] Hotkey `Ctrl+M` para mute/clear instantâneo
+- [x] Motor Google TTS como fallback permanente (v4.1)
+
+### Fase 4: Futura (opcional)
+- [ ] SFX sonoros para presentes/eventos
+- [ ] Leitura de boas-vindas ao entrar na live
+- [ ] Suporte a múltiplos idiomas no motor Google
+
+---
+
+## Medidas de Estabilidade
+
+> [!CAUTION]
+> O motor de voz opera em modo Try-Catch total. Se qualquer áudio falhar ou a internet oscilar, o sistema pula para a próxima mensagem sem afetar o desempenho visual do chat.
+
+> [!TIP]
+> Se o motor Edge apresentar erro 403 (Microsoft atualizou servidores), trocar para **Google TTS** nas configurações resolve imediatamente sem reiniciar o bot.
+
+---
+
+**Versão Atual**: v4.1 (Dual Engine — Edge + Google)
+**Última Atualização**: Outubro 2026
+**Responsável**: FuriousOfNight / Agente de IA
+
 
 ## Arquitetura: O Motor de Voz ("The Engine")
 
