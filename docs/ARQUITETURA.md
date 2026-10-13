@@ -13,8 +13,9 @@ main.py
 ├── ChatManager               ← core/chat_manager.py
 │   ├── TwitchHandler         ← chat_handlers/twitch_handler.py  (Thread IRC)
 │   ├── TikTokHandler         ← chat_handlers/tiktok_handler.py  (Asyncio)
-│   ├── KickHandler           ← chat_handlers/kick_handler.py    (Asyncio)
+│   ├── KickHandler           ← chat_handlers/kick_handler.py    (Asyncio + Centrifugo)
 │   └── YoutubeHandler        ← chat_handlers/youtube_handler.py (Thread/Poller)
+├── BadgeManager              ← utils/badge_manager.py           (Renderizador Unificado de Badges)
 ├── SettingsManager           ← core/settings_manager.py
 ├── HotkeyManager             ← core/hotkey_manager.py
 └── TTSManager                ← utils/tts_engine.py
@@ -101,7 +102,8 @@ O `tiktok_session_id` é criptografado/descriptografado automaticamente via **Wi
 | PyQt6-WebEngine | Login TikTok (WebView) |
 | TikTokLive | WebSocket TikTok via EulerStream |
 | httpx | Requisições assíncronas Webcast API e download de avatares |
-| kickpython | WebSocket Kick |
+| curl_cffi | Requisições HTTP com impersonate Chrome (Cloudflare bypass para Kick e APIs) |
+| websockets | Conexão em tempo real nativa ao Centrifugo da Kick |
 | edge-tts / gtts + pygame-ce | Bot de voz (Motor Neural Edge ou Google TTS alternativo) |
 | pywin32 | Criptografia DPAPI |
 | PyInstaller | Geração do executável |

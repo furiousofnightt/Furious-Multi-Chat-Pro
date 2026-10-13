@@ -18,6 +18,14 @@ class TwitchHandler(BaseChatHandler):
             return
         
         self.is_running = True
+        
+        # Carrega badges de assinante/bits específicas do canal em background
+        try:
+            from utils.badge_manager import badge_manager
+            badge_manager.load_twitch_channel_badges(self.username)
+        except Exception:
+            pass
+
         self.thread = threading.Thread(target=self._run_irc, daemon=True)
         self.thread.start()
         # Thread paralela de polling de viewers (a cada 60s via GQL)
@@ -169,7 +177,19 @@ class TwitchHandler(BaseChatHandler):
                                             
                                             message = ' '.join(new_words)
 
-                                            self.message_received.emit(user, message, "twitch")
+                                            # Processar badges oficiais da Twitch (Moderador, VIP, Subscritor, etc.)
+                                            display_name = tags.get('display-name') or user
+                                            badges_tag = tags.get('badges', '')
+                                            badge_str = ''
+                                            if badges_tag:
+                                                try:
+                                                    from utils.badge_manager import badge_manager
+                                                    badge_str = badge_manager.get_twitch_badges_html(badges_tag)
+                                                except Exception:
+                                                    pass
+
+                                            author_display = f"{badge_str} {display_name}".strip() if badge_str else display_name
+                                            self.message_received.emit(author_display, message, "twitch")
                                 except Exception as e:
                                     print(f"💥 Erro ao processar linha IRC: {e}")
                                     pass

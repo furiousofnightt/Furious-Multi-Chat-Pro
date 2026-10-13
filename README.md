@@ -26,6 +26,11 @@ O **Furious Multi Chat Pro** é uma aplicação desktop de alta performance cria
 ## ✨ Principais Funcionalidades
 
 - **🌐 Chat Multi-Plataforma**: Capture e visualize mensagens do Twitch, TikTok, Kick e YouTube em tempo real em uma única janela.
+- **⚡ Kick em Tempo Real (Centrifugo)**: Integração nativa e de baixa latência com o protocolo moderno de WebSockets da Kick (Centrifugo), com handshake automático, keep-alive inteligente e renovação contínua de sessão sem depender de login ou tokens expiráveis.
+- **🏅 Sistema Unificado de Badges**: Renderização de insígnias oficiais de todas as redes:
+  - **Kick**: Vetores originais oficiais de Moderador (martelo ciano), VIP (coroa), Verificado, Broadcaster, além de distintivos de inscritos com metas de meses (`subscriber_badges`) e badges de nível (V2).
+  - **TikTok**: Ícone oficial de Moderador isolado (sem pills duplicadas), pílulas coloridas de Doador/Gifter (`Lv. N`), Fã-Clube (`Heart`) e Top Gifter Rank (`Nº 1`).
+  - **Twitch & YouTube**: Badges de moderadores, assinantes e membros fiéis integradas nativamente.
 - **👥 Aba de Espectadores Online (TikTok)**: Aba dedicada com navegação instantânea para acompanhar em tempo real **todos os espectadores conectados na live** — com foto de perfil circular, nome, @username, pontuação e numeração contínua (`#1` a `#N`).
 - **🔡 Ajuste Dinâmico de Fonte**: Botões rápidos `A-` e `A+` na lista de espectadores para aumentar ou diminuir o tamanho dos nomes e textos em tempo real.
 - **🖼️ Eventos Enriquecidos**: Fotos de perfil e badges integrados em eventos de presentes (`GiftEvent`), novos seguidores (`FollowEvent`) e compartilhamentos (`ShareEvent`).

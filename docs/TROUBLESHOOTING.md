@@ -76,12 +76,18 @@ nslookup twitch.tv
 
 ---
 
-### Kick: Não conecta
+### Kick: Mostra viewers/conectado mas mensagens não sobem
 
-**Soluções**:
-1. Verificar instalação: `pip install kickpython`
-2. Confirmar nome do canal (sem `https://`)
-3. Testar canal diferente
+**Causa**: A Kick desativou globalmente os clusters do serviço legado **Pusher** (`ws-us2.pusher.com / 32cbd69e4b950bf97679`), migrando toda a sua plataforma para o motor **Centrifugo PRO**. Bibliotecas antigas como `kickpython` pararam de funcionar porque a chave do Pusher foi deletada.
+
+**Solução Implementada**:
+A aplicação agora se conecta diretamente à infraestrutura moderna da Kick:
+1. Gera automaticamente o token guest oficial em `https://web.kick.com/api/v1/realtime/auth/connection` (sem precisar de login).
+2. Conecta ao WebSocket Centrifugo oficial em `wss://realtime.us-west-2.platform.kick.com/connection/websocket`.
+3. Mantém a conexão ativa continuamente via keep-alive (`{}` ping-pong) e renovação proativa do token antes da expiração de 45 min.
+4. **Resolução de problemas comuns**:
+   * Certifique-se de preencher apenas o nome de usuário do streamer (ex: `mandiocaa`), sem `https://` ou `@`.
+   * A biblioteca `curl_cffi` deve estar instalada (`pip install curl_cffi`) para permitir contornar as proteções da Cloudflare.
 
 ---
 

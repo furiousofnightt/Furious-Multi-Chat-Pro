@@ -205,7 +205,16 @@ class YoutubeHandler(BaseChatHandler):
                         if author_name and author_name[0] == '@':
                             author_name = author_name[1:]
 
-                        self.message_received.emit(author_name, msg, "youtube")
+                        # Processar badges do YouTube (Membro do Canal, Moderador, Dono)
+                        badge_str = ''
+                        try:
+                            from utils.badge_manager import badge_manager
+                            badge_str = badge_manager.get_youtube_badges_html(c.author)
+                        except Exception:
+                            pass
+
+                        author_display = f"{badge_str} {author_name}".strip() if badge_str else author_name
+                        self.message_received.emit(author_display, msg, "youtube")
 
                     # Atualiza os viewers a cada 15 segundos
                     current_time = time.time()

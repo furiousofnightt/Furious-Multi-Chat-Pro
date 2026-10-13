@@ -64,6 +64,17 @@ import time
 import os
 import re
 import traceback
+import logging
+class _IgnoreWebcastLinkLayerFilter(logging.Filter):
+    def filter(self, record):
+        try:
+            return "WebcastLinkLayerMessage" not in record.getMessage()
+        except Exception:
+            return True
+
+logging.getLogger("TikTokLive").addFilter(_IgnoreWebcastLinkLayerFilter())
+logging.getLogger("TikTokLive.client").addFilter(_IgnoreWebcastLinkLayerFilter())
+
 
 
 class TikTokHandler(BaseChatHandler):
@@ -315,71 +326,20 @@ class TikTokHandler(BaseChatHandler):
                     return ''
 
                 def _get_badge_str(user_obj) -> str:
-                    """Retorna HTML com badges TikTok como <img> de SVG local. Nunca levanta exceção."""
-                    badges = ''
+                    """Retorna HTML com badges oficiais do TikTok (CDN original) ou fallback SVG. Nunca levanta exceção."""
                     try:
-                        def badge_img(svg_name):
-                            path = resource_path(f'assets/{svg_name}').replace('\\', '/')
-                            return (f" <img src='file:///{path}' "
-                                    f"width='16' height='16' "
-                                    f"style='vertical-align:middle;margin-left:2px;'>")
-                        
-                        is_mod = False
-                        is_top_gifter = False
-                        is_fan = False
-                        is_host = False
-                        is_sub = False
-                        is_friend = False
-                        is_pro = False
-                        
-                        # Fix for TikTokLive v6 bug: 'badges' vs 'badge_list'
-                        badge_list = getattr(user_obj, 'badge_list', []) or []
-                        if not badge_list:
-                            # Fallback para versões antigas
-                            badge_list = getattr(user_obj, 'badges', []) or []
-                            
-                        for b in badge_list:
-                            try:
-                                scene_name = str(getattr(getattr(b, 'scene_type', None), 'name', '') or '').upper()
-                                scene_value = getattr(getattr(b, 'scene_type', None), 'value', -1)
-                                if scene_name == 'ADMIN' or scene_value == 1:
-                                    is_mod = True
-                                elif 'RANK_LIST' in scene_name or scene_value == 6:
-                                    is_top_gifter = True
-                                elif scene_name == 'FANS' or scene_value == 10:
-                                    is_fan = True
-                                elif scene_name == 'ANCHOR' or scene_value == 12:
-                                    is_host = True
-                                elif scene_name == 'SUBSCRIBER' or scene_name == 'NEW_SUBSCRIBER' or scene_value in (4, 7):
-                                    is_sub = True
-                                elif scene_name == 'FRIENDS' or scene_value == 3:
-                                    is_friend = True
-                                elif scene_name == 'LIVE_PRO' or scene_value == 11:
-                                    is_pro = True
-                            except Exception:
-                                pass
-
-                        if getattr(user_obj, 'verified', False):
-                            badges += badge_img('tiktok_verified.svg')
-                        if is_host:
-                            badges += badge_img('tiktok_host.svg')
-                        if is_mod or getattr(user_obj, 'is_moderator', False):
-                            badges += badge_img('tiktok_mod.svg')
-                        if is_pro:
-                            badges += badge_img('tiktok_live_pro.svg')
-                        if is_sub:
-                            badges += badge_img('tiktok_sub.svg')
-                        if is_top_gifter or getattr(user_obj, 'is_top_gifter', False):
-                            badges += badge_img('tiktok_top_gifter.svg')
-                        if is_friend:
-                            badges += badge_img('tiktok_friend.svg')
-                        
-                        member_lvl = getattr(user_obj, 'member_level', None)
-                        if is_fan or (member_lvl and str(member_lvl).isdigit() and int(member_lvl) > 0):
-                            badges += badge_img('tiktok_fan.svg')
+                        from utils.badge_manager import badge_manager
+                        return badge_manager.get_tiktok_badges_html(user_obj)
                     except Exception:
-                        pass
-                    return badges
+                        return ''
+
+                def _get_badges_tuple(user_obj) -> tuple[str, str]:
+                    """Retorna (prefix_html, suffix_html) com badges oficiais."""
+                    try:
+                        from utils.badge_manager import badge_manager
+                        return badge_manager.get_tiktok_badges_tuple(user_obj)
+                    except Exception:
+                        return ('', '')
 
                 async def _sync_uptime_background():
                     """Busca uptime em background sem bloquear o event loop de mensagens."""
@@ -618,16 +578,17 @@ class TikTokHandler(BaseChatHandler):
                         except Exception:
                             pass
 
-                        # Badges usando parsing manual corrigido para TikTokLive v6
-                        badge_str = ''
+                        # Badges usando parsing completo de níveis e ícones oficiais
+                        prefix_badges = ''
+                        suffix_badges = ''
                         try:
                             if user_obj:
-                                badge_str = _get_badge_str(user_obj)
+                                prefix_badges, suffix_badges = _get_badges_tuple(user_obj)
                         except Exception:
                             pass
 
-                        # author_display: avatar + nome + badges (só se houver enriquecimento)
-                        author_display = f"{avatar_html}{author}{badge_str}" if (avatar_html or badge_str) else None
+                        # author_display: avatar + badges antes (nível, fã-clube) + nome + badges depois (top gifter #1)
+                        author_display = f"{avatar_html}{prefix_badges}{author}{suffix_badges}" if (avatar_html or prefix_badges or suffix_badges) else None
 
                         print(f"[TikTok] {author}: {msg[:50]}...", flush=True)
                         _emit_if_new(author, msg, author_display=author_display)
@@ -849,14 +810,15 @@ class TikTokHandler(BaseChatHandler):
                             avatar_html = await _get_avatar_b64(user_obj)
 
                         # Badges
-                        badge_str = ''
+                        prefix_badges = ''
+                        suffix_badges = ''
                         if user_obj:
                             try:
-                                badge_str = _get_badge_str(user_obj)
+                                prefix_badges, suffix_badges = _get_badges_tuple(user_obj)
                             except:
                                 pass
 
-                        author_display = f"{avatar_html}{author}{badge_str}" if (avatar_html or badge_str) else author
+                        author_display = f"{avatar_html}{prefix_badges}{author}{suffix_badges}" if (avatar_html or prefix_badges or suffix_badges) else author
 
                         # Busca o ícone no cache construído pelo fetch_gift_list
                         icon_html = await _get_gift_icon_html(gift_name)
