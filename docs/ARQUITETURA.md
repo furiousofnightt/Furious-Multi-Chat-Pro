@@ -60,6 +60,13 @@ status_changed         = pyqtSignal(str, bool)              # (platform, connect
 platform_stats_updated = pyqtSignal(str, int, int, int, int) # (platform, viewers, uptime, likes, total_views)
 ```
 
+### OnlineViewersListWidget → ChatWindow
+```python
+back_requested          = pyqtSignal()   # usuário clicou em ← Voltar
+open_settings_requested = pyqtSignal()   # usuário clicou em ⚙ Abrir Configurações (banners)
+sync_requested          = pyqtSignal()   # usuário clicou em ↺ Sincronizar
+```
+
 ## Fluxo de Mensagem
 
 ```
@@ -75,18 +82,26 @@ Handler → message_received(user, text, platform)
 _sync_online_audience_loop (Asyncio, a cada 4s)
     → GET https://webcast.tiktok.com/webcast/ranklist/online_audience/
     → Extração de 100% dos espectadores logados + total na sala
-    → TikTokHandler.viewers_list_updated.emit(viewers_list)
+    → TikTokHandler.viewers_list_updated.emit(viewers_list)  ← inclui lista vazia sem fallback de memória
     → ChatWindow.update_tiktok_viewers(viewers_list)
     → OnlineViewersListWidget.set_viewers(viewers_list)
+        → Lista vazia → placeholder limpo + horário (sem reter dados antigos)
         → Atualização in-place se a lista for idêntica (zero lag)
         → Renderização de ViewerCardWidget (foto, nome, @username, #rank, pontos)
+
+[Botão ↺ Sincronizar]  ←  sync_requested signal
+    → ChatWindow.request_sync_viewers()
+    → TikTokHandler.request_sync_now()  (asyncio.run_coroutine_threadsafe)
+    → GET /webcast/ranklist/online_audience/  (requisição fresca, sem cache)
+    → viewers_list_updated.emit(resultado)  → mesmo fluxo acima
 ```
 
 ## Proteção de Autenticação e Rate-Limit (TikTok)
 
 1. **Sem SessionID**: O loop `_sync_online_audience_loop` encerra imediatamente (`return`), sem emitir nenhuma requisição HTTP para o TikTok.
 2. **Erro 401/403 (Token Expirado)**: Pausa de 30 segundos entre tentativas, evitando flood.
-3. **Streamer Desconectado / Removido**: `ChatManager.restart_platform("tiktok")` limpa a lista de espectadores e redefine o card para `TikTok não configurado`.
+3. **Rate-limit do botão Sincronizar**: Botão desabilitado por 2,5s após cada clique.
+4. **Streamer Desconectado / Removido**: `ChatManager.restart_platform("tiktok")` limpa a lista de espectadores e redefine o card para `TikTok não configurado`.
 
 ## Segurança (SettingsManager)
 

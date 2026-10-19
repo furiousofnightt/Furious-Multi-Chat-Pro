@@ -10,6 +10,7 @@ from PyQt6.QtWebEngineCore import QWebEngineProfile
 from PyQt6.QtCore import Qt, QUrl, pyqtSignal, QTimer
 from PyQt6.QtGui import QIcon
 from utils.resource_path import resource_path
+from utils.translations import get_translation
 import os
 
 
@@ -23,9 +24,10 @@ class TikTokLoginDialog(QDialog):
     # Emite (sessionid: str)
     login_success = pyqtSignal(str)
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, lang="pt-br"):
         super().__init__(parent)
-        self.setWindowTitle("Login TikTok — Furious Multi Chat")
+        self.lang = lang
+        self.setWindowTitle(get_translation("tiktok_dialog_title", self.lang))
         self.setMinimumSize(520, 680)
         self.resize(520, 680)
         self.setModal(True)
@@ -58,9 +60,9 @@ class TikTokLoginDialog(QDialog):
         # Cabeçalho
         header = QHBoxLayout()
         header.setContentsMargins(12, 10, 12, 6)
-        title_lbl = QLabel("Faca login no TikTok para ativar lives +18")
+        title_lbl = QLabel(get_translation("tiktok_dialog_header", self.lang))
         title_lbl.setStyleSheet("color: #eee; font-weight: bold; font-size: 13px;")
-        cancel_btn = QPushButton("Cancelar")
+        cancel_btn = QPushButton(get_translation("cancel_btn", self.lang))
         cancel_btn.setObjectName("cancel_btn")
         cancel_btn.setFixedWidth(80)
         cancel_btn.clicked.connect(self.reject)
@@ -89,7 +91,7 @@ class TikTokLoginDialog(QDialog):
         # Status bar inferior
         status_row = QHBoxLayout()
         status_row.setContentsMargins(12, 6, 12, 0)
-        self.status_lbl = QLabel("Aguardando login...")
+        self.status_lbl = QLabel(get_translation("tiktok_dialog_waiting", self.lang))
         self.status_lbl.setStyleSheet("color: #666; font-size: 10px;")
         status_row.addWidget(self.status_lbl)
         layout.addLayout(status_row)
@@ -111,7 +113,7 @@ class TikTokLoginDialog(QDialog):
         if name == "sessionid" and "tiktok.com" in domain:
             value = cookie.value().data().decode("utf-8", errors="ignore")
             if value:
-                self.status_lbl.setText("Login detectado! Salvando...")
+                self.status_lbl.setText(get_translation("tiktok_login_detecting", self.lang))
                 self.status_lbl.setStyleSheet("color: #00cc66; font-weight: bold; font-size: 10px;")
                 # Fechar quase que imediatamente após sucesso!
                 QTimer.singleShot(800, lambda: self._finish_login(value))
@@ -124,8 +126,8 @@ class TikTokLoginDialog(QDialog):
         url = self.view.url().toString()
         if ok:
             if "/login" in url or "passport" in url:
-                self.status_lbl.setText("Faça o login normalmente — detectaremos automaticamente.")
+                self.status_lbl.setText(get_translation("tiktok_login_instruction", self.lang))
                 self.status_lbl.setStyleSheet("color: #888; font-size: 10px;")
             elif "tiktok.com" in url and "/login" not in url:
-                self.status_lbl.setText("Carregando sessao...")
+                self.status_lbl.setText(get_translation("tiktok_login_loading_session", self.lang))
                 self.status_lbl.setStyleSheet("color: #888; font-size: 10px;")

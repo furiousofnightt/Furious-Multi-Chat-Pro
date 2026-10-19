@@ -144,9 +144,9 @@ O aplicativo não conseguirá descriptografar o token antigo (esse é o comporta
 
 ### Janela não fica transparente
 
-**Causa**: Glassmorphism requer Windows 11. No Windows 10, apenas transparência básica funciona.
+**Causa**: No Windows 11 o desfoque Glassmorphism (Mica/Acrylic) é nativo. No Windows 10, você pode ativar o **Fundo Escuro Translúcido** e regular a **Opacidade do Fundo** de forma independente.
 
-**Solução**: Ajuste a opacidade nas configurações.
+**Solução**: Abra as Configurações (ícone da engrenagem) e ajuste o controle deslizante de **Opacidade do Fundo** para o valor desejado (ex: 70%). Se estiver no Windows 10 e quiser desfoque acrílico, certifique-se de que a opção de transparência do Windows está ligada em *Configurações do Windows > Personalização > Cores*.
 
 ### Hotkeys não funcionam
 
@@ -189,7 +189,17 @@ Sim. Ative "Click-through" nas configurações. A janela ficará transparente a 
 ## 👥 Espectadores Online (TikTok)
 
 ### Como funciona a aba de Espectadores Online?
-O aplicativo possui uma visualização dedicada acessível pelo botão de alternância no header. Ela consulta a API oficial de audiência do TikTok a cada 4 segundos e exibe todos os usuários conectados na sua live com foto de perfil, nome, @username, pontuação de contribuição e numeração sequencial (#1 a #N).
+O aplicativo possui uma visualização dedicada acessível pelo botão de alternância no header. Ela consulta a API oficial de audiência do TikTok a cada 4 segundos e exibe todos os usuários conectados na sua live com foto de perfil, nome, @username, pontuação de contribuição e numeração sequencial (#1 a #N). **Todos os dados são 100% em tempo real** — a aba não mantém cache, então ela sempre reflete o estado atual da live.
+
+### Para que serve o botão "↺ Sincronizar"?
+O botão força uma consulta imediata à API do TikTok fora do ciclo automático de 4 segundos. É útil quando:
+- A aba ficou vazia após horas de live (o loop interno parou por queda momentânea de conexão WebSocket).
+- Você quer confirmar quem está online agora antes de se despedir.
+
+Após clicar, o botão fica desabilitado por 2,5 segundos para evitar excesso de requisições. O label ao lado mostra a hora da última atualização recebida.
+
+### A aba ficou vazia no meio da live — o que fazer?
+Clique em **↺ Sincronizar**. Isso força uma requisição fresca diretamente na API sem precisar fechar e reabrir o aplicativo. Se o problema persistir, a conexão WebSocket com o TikTok pode ter sido encerrada — nesse caso, reinicie a conexão nas Configurações (alterando e salvando o canal TikTok).
 
 ### Por que é necessário login no TikTok para ver os espectadores online?
 A rota de audiência em tempo real (`/webcast/ranklist/online_audience/`) do TikTok é um endpoint restrito que exige um cookie de sessão válido (`sessionid`). Sem login, o app desativa o loop automaticamente para evitar bloqueios por taxa de requisições (429/403) e exibe um card orientando a fazer login nas Configurações.

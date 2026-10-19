@@ -381,8 +381,16 @@ class BadgeManager:
         badge_list = getattr(user_obj, 'badge_list', []) or getattr(user_obj, 'badges', []) or []
         for b in badge_list:
             try:
+                # Se a badge tiver a flag display explicitamente desativada, ignora
+                if hasattr(b, 'display') and b.display is False:
+                    continue
+
                 scene_name = str(getattr(getattr(b, 'scene_type', None), 'name', '') or '').upper()
                 scene_val = getattr(getattr(b, 'scene_type', None), 'value', -1)
+
+                # Ignora explicitamente CLASS_RANK (13) para não capturar espectadores comuns
+                if scene_name == 'CLASS_RANK' or scene_val == 13:
+                    continue
 
                 if scene_name == 'ADMIN' or scene_val == 1:
                     is_mod = True
@@ -503,22 +511,52 @@ class BadgeManager:
                         continue
                     seen_texts.add(clean_text_key)
 
-                # A: TOP GIFTER / RANK BADGE (ex: Nº 1, Nº 2) -> Suffix
-                if scene_val == 6 or 'RANK' in scene_name or (level_text and any(rk in level_text.upper() for rk in ('Nº', 'NO.', 'TOP', 'RANK'))):
+                # A: TOP GIFTER / RANK BADGE (estritamente Top 1 e Top 2 da transmissão) -> Suffix
+                is_rank_scene = (scene_val == 6 or scene_name == 'BADGE_SCENE_TYPE_RANK_LIST')
+                has_rank_text = bool(level_text and any(rk in level_text.upper() for rk in ('Nº', 'NO.', 'TOP')))
+
+                if is_rank_scene or has_rank_text:
                     if added_rank:
                         continue
-                    rank_text = level_text if level_text else "Nº 1"
-                    if not local_icon:
-                        local_icon = resource_path('assets/rank_1.svg')
-                    pill_url = self._render_pill_badge(
-                        local_icon, rank_text,
-                        bg_color=bg_color or "#9b1e45",
-                        text_color=font_color or "#ffffff",
-                        border_color=border_color
-                    )
-                    if pill_url:
-                        suffix_parts.append(f"<img src='{pill_url}' height='18' style='vertical-align:middle;margin-left:3px;margin-right:1px;'>")
-                        added_rank = True
+
+                    # Determinar se o usuário é Top 1 ou Top 2
+                    rank_num = None
+                    vip_no = int(getattr(user_obj, 'top_vip_no', 0) or 0)
+                    if vip_no in (1, 2):
+                        rank_num = vip_no
+
+                    if rank_num is None and level_text:
+                        m = re.search(r'(?:Nº|NO\.?|TOP|RANK)?\s*([12])\b', level_text, re.IGNORECASE)
+                        if m:
+                            rank_num = int(m.group(1))
+
+                    if rank_num is None and combine:
+                        c_text = getattr(combine, 'text', None)
+                        if c_text:
+                            pieces = getattr(c_text, 'pieces', []) or []
+                            for p in pieces:
+                                if str(p).strip() in ('1', '2'):
+                                    rank_num = int(str(p).strip())
+                                    break
+
+                    # Apenas os que forem comprovadamente Top 1 ou Top 2 recebem a badge
+                    if rank_num in (1, 2):
+                        rank_text = level_text if level_text else f"Nº {rank_num}"
+                        if not local_icon:
+                            local_icon = resource_path('assets/rank_1.svg' if rank_num == 1 else 'assets/rank_2.svg')
+
+                        pill_url = self._render_pill_badge(
+                            local_icon, rank_text,
+                            bg_color=bg_color or ("#9b1e45" if rank_num == 1 else "#6e203c"),
+                            text_color=font_color or "#ffffff",
+                            border_color=border_color
+                        )
+                        if pill_url:
+                            suffix_parts.append(f"<img src='{pill_url}' height='18' style='vertical-align:middle;margin-left:3px;margin-right:1px;'>")
+                            added_rank = True
+                        elif local_icon:
+                            suffix_parts.append(f"<img src='{local_icon}' height='18' style='vertical-align:middle;margin-left:3px;margin-right:1px;'>")
+                            added_rank = True
                     continue
 
                 # B: FÃ-CLUBE
@@ -596,7 +634,19 @@ class BadgeManager:
             prefix_parts.append(badge_img('tiktok_sub.svg'))
         if is_friend:
             prefix_parts.append(badge_img('tiktok_friend.svg'))
-        if (getattr(user_obj, 'is_top_gifter', False) or is_top_gifter) and not added_rank:
+        top_vip_no = int(getattr(user_obj, 'top_vip_no', 0) or 0)
+        if top_vip_no in (1, 2) and not added_rank:
+            icon_file = 'assets/rank_1.svg' if top_vip_no == 1 else 'assets/rank_2.svg'
+            local_icon = resource_path(icon_file)
+            pill_url = self._render_pill_badge(
+                local_icon, f"Nº {top_vip_no}",
+                bg_color="#9b1e45" if top_vip_no == 1 else "#6e203c",
+                text_color="#ffffff"
+            )
+            if pill_url:
+                suffix_parts.append(f"<img src='{pill_url}' height='18' style='vertical-align:middle;margin-left:3px;margin-right:1px;'>")
+                added_rank = True
+        elif (getattr(user_obj, 'is_top_gifter', False) or is_top_gifter) and not added_rank:
             suffix_parts.append(badge_img('tiktok_top_gifter.svg'))
 
         prefix_html = (" " + " ".join(prefix_parts) + " ") if prefix_parts else ""

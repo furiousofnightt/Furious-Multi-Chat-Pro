@@ -52,6 +52,8 @@ class SettingsManager:
             "youtube": "",
             "language": "pt-br",
             "opacity": 0.85,
+            "bg_opacity": 0.75,
+            "text_opacity": 1.0,
             "theme": "dark",
             "click_through": False,
             "blacklist": [],
@@ -90,6 +92,12 @@ class SettingsManager:
                 except Exception as e:
                     print(f"⚠️ Erro ao descriptografar sessão: {e}")
                     loaded["tiktok_session_id"] = ""
+
+            # Compatibilidade retroativa com bg_opacity e text_opacity
+            if "bg_opacity" not in loaded and "opacity" in loaded:
+                loaded["bg_opacity"] = loaded["opacity"]
+            if "text_opacity" not in loaded:
+                loaded["text_opacity"] = 1.0
 
             defaults.update(loaded)
         return defaults

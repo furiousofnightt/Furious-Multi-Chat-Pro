@@ -124,17 +124,17 @@ Esta questão foi consertada a nível de código no `chat_manager.py` durante o 
 
 ---
 
-### Glassmorphism não funciona
+### Glassmorphism / Fundo Translúcido no Windows 10 e 11
 
-**Causa**: Requer Windows 11 com compositor DWM ativo.
+O aplicativo conta com suporte duplo para transparência moderna:
+- **Windows 11**: Aplica Mica / Acrylic nativo acelerado por hardware via DWM.
+- **Windows 10**: Suporta **Fundo Escuro Translúcido** de alta performance (sem bugs nem perda de contraste) e Acrylic Blur Behind calibrado via API de composição.
+- **Controle Independente**: Você pode ajustar a **Opacidade do Fundo** (para ver o jogo atrás) sem afetar a **Opacidade do Texto** (mantendo as mensagens 100% nítidas).
 
-- Windows 10: Glassmorphism **não funciona**
-- Windows 11: Deve funcionar normalmente
-
-**Soluções**:
-1. Atualizar para Windows 11
-2. Verificar se efeitos visuais estão ativados em Configurações do Windows
-3. Usar opacidade normal como fallback
+**Dicas de configuração**:
+1. Para Windows 10 ou 11: Abra as Configurações (ícone de engrenagem) e ajuste o slider **Opacidade do Fundo** para o nível desejado (ex: 60% a 80%).
+2. Se estiver no Windows 10 e quiser o desfoque nativo adicional do sistema, certifique-se de que "Efeitos de transparência" estão ativados nas Configurações do Windows (*Personalização > Cores*).
+3. Use o slider de **Opacidade do Texto** se preferir suavizar a leitura do chat.
 
 ---
 

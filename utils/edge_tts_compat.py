@@ -21,19 +21,38 @@ logger = logging.getLogger("EdgeTTSCompat")
 def apply_edge_tts_compat():
     """
     Aplica patch seguro e idempotente nas constantes do edge_tts.
-    Se versões futuras do edge-tts já apontarem para o endpoint novo,
-    o patch não sobrescreve desnecessariamente.
+    A partir da versão 7.3.0, o edge-tts implementa nativamente o protocolo
+    DRM v2 (Sec-MS-GEC v2) no endpoint oficial 'speech.platform.bing.com',
+    eliminando os erros 403 e os limites severos (429) do msedgeservices.
     """
     try:
         import edge_tts
         import edge_tts.constants
         import edge_tts.communicate
 
+        version_str = getattr(edge_tts, "__version__", "0.0.0")
+        try:
+            version_tuple = tuple(int(x) for x in version_str.split(".")[:3] if x.isdigit())
+        except Exception:
+            version_tuple = (0, 0, 0)
+
+        # Se for edge-tts 7.3.0+, o DRM v2 é nativo e o endpoint oficial funciona 100% sem 429
+        if version_tuple >= (7, 3, 0):
+            # Garante que não está apontando para o endpoint throttled da MS
+            if "api.msedgeservices.com" in getattr(edge_tts.constants, "WSS_URL", ""):
+                orig_url = (
+                    "wss://speech.platform.bing.com/consumer/speech/synthesize/readaloud/edge/v1"
+                    f"?TrustedClientToken={getattr(edge_tts.constants, 'TRUSTED_CLIENT_TOKEN', '6A5AA1D4EAFF4E9FB37E23D68491D6F4')}"
+                )
+                edge_tts.constants.WSS_URL = orig_url
+                edge_tts.communicate.WSS_URL = orig_url
+            return True
+
         current_url = getattr(edge_tts.constants, "WSS_URL", "")
         trusted_token = getattr(edge_tts.constants, "TRUSTED_CLIENT_TOKEN", "6A5AA1D4EAFF4E9FB37E23D68491D6F4")
 
-        # Se o endpoint ainda estiver apontando para o servidor legado com 403:
-        if "speech.platform.bing.com" in current_url or "api.msedgeservices.com" not in current_url:
+        # Fallback apenas para versões legadas (< 7.3.0):
+        if "speech.platform.bing.com" in current_url:
             new_url = (
                 "wss://api.msedgeservices.com/tts/cognitiveservices/websocket/v1"
                 f"?Ocp-Apim-Subscription-Key={trusted_token}"

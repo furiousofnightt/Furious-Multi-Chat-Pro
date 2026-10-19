@@ -23,9 +23,11 @@ _wheel_ignore = _WheelIgnoreFilter()
 
 class HotkeyField(QLineEdit):
     """Campo que captura o atalho de teclado quando o usuário pressiona as teclas."""
-    def __init__(self, placeholder="Clique e pressione as teclas...", parent=None):
+    def __init__(self, placeholder=None, parent=None, lang="pt-br"):
         super().__init__(parent)
-        self.setPlaceholderText(placeholder)
+        self.lang = lang
+        ph = placeholder if placeholder else get_translation("hotkey_press_keys", self.lang)
+        self.setPlaceholderText(ph)
         self.setReadOnly(True)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self._capturing = False
@@ -43,7 +45,7 @@ class HotkeyField(QLineEdit):
     def mousePressEvent(self, event):
         self._capturing = True
         self.setText("")
-        self.setPlaceholderText("⏳ Pressione as teclas...")
+        self.setPlaceholderText(get_translation("hotkey_capturing", self.lang))
         self.setFocus()
         super().mousePressEvent(event)
     
@@ -59,7 +61,7 @@ class HotkeyField(QLineEdit):
         # Escape cancela a captura
         if key == Qt.Key.Key_Escape:
             self._capturing = False
-            self.setPlaceholderText("Clique e pressione as teclas...")
+            self.setPlaceholderText(get_translation("hotkey_press_keys", self.lang))
             return
         
         parts = []
@@ -76,7 +78,7 @@ class HotkeyField(QLineEdit):
         combo = "+".join(parts)
         self.setText(combo)
         self._capturing = False
-        self.setPlaceholderText("Clique e pressione as teclas...")
+        self.setPlaceholderText(get_translation("hotkey_press_keys", self.lang))
         self.clearFocus()
 
 
@@ -214,7 +216,7 @@ class ConfigWindow(QDialog):
             h_lay.addStretch()
             layout.addWidget(container)
 
-        section_label("Conexões", left_layout, "icon_link.svg")
+        section_label(get_translation("connections_section", lang), left_layout, "icon_link.svg")
         self._add_config_field_to("twitch", get_translation("twitch_label", lang), left_layout)
         self._add_config_field_to("tiktok", get_translation("tiktok_label", lang), left_layout)
         self._add_config_field_to("kick",   get_translation("kick_label", lang),   left_layout)
@@ -223,24 +225,42 @@ class ConfigWindow(QDialog):
 
         sep1 = QFrame(); sep1.setFrameShape(QFrame.Shape.HLine); sep1.setStyleSheet("color: #333; margin: 6px 0;")
         left_layout.addWidget(sep1)
-        section_label("Geral", left_layout, "settings.svg")
+        section_label(get_translation("general_section", lang), left_layout, "settings.svg")
 
         self.glass_check = QCheckBox(get_translation("glassmorphism_label", lang))
         self.glass_check.setChecked(self.settings_manager.settings.get("glassmorphism", True))
+        self.glass_check.setToolTip(get_translation("glassmorphism_tooltip", lang))
         left_layout.addWidget(self.glass_check)
 
-        left_layout.addWidget(QLabel(get_translation("opacity_label", lang)))
-        op_row = QHBoxLayout()
-        self.opacity_slider = QSlider(Qt.Orientation.Horizontal)
-        self.opacity_slider.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
-        self.opacity_slider.installEventFilter(_wheel_ignore)
-        self.opacity_slider.setRange(20, 100)
-        self.opacity_slider.setValue(int(self.settings_manager.settings.get("opacity", 0.85) * 100))
-        self.opacity_val_label = QLabel(f"{self.opacity_slider.value()}%")
-        self.opacity_val_label.setFixedWidth(36)
-        self.opacity_slider.valueChanged.connect(lambda v: self.opacity_val_label.setText(f"{v}%"))
-        op_row.addWidget(self.opacity_slider); op_row.addWidget(self.opacity_val_label)
-        left_layout.addLayout(op_row)
+        # 1. Opacidade do Fundo (Fundo Escuro Translúcido)
+        left_layout.addWidget(QLabel(get_translation("bg_opacity_label", lang)))
+        bg_op_row = QHBoxLayout()
+        self.bg_opacity_slider = QSlider(Qt.Orientation.Horizontal)
+        self.bg_opacity_slider.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        self.bg_opacity_slider.installEventFilter(_wheel_ignore)
+        self.bg_opacity_slider.setRange(0, 100)
+        current_bg_op = int(self.settings_manager.settings.get("bg_opacity", self.settings_manager.settings.get("opacity", 0.75)) * 100)
+        self.bg_opacity_slider.setValue(current_bg_op)
+        self.bg_opacity_val_label = QLabel(f"{self.bg_opacity_slider.value()}%")
+        self.bg_opacity_val_label.setFixedWidth(36)
+        self.bg_opacity_slider.valueChanged.connect(lambda v: self.bg_opacity_val_label.setText(f"{v}%"))
+        bg_op_row.addWidget(self.bg_opacity_slider); bg_op_row.addWidget(self.bg_opacity_val_label)
+        left_layout.addLayout(bg_op_row)
+
+        # 2. Opacidade do Texto / Mensagens
+        left_layout.addWidget(QLabel(get_translation("text_opacity_label", lang)))
+        txt_op_row = QHBoxLayout()
+        self.text_opacity_slider = QSlider(Qt.Orientation.Horizontal)
+        self.text_opacity_slider.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        self.text_opacity_slider.installEventFilter(_wheel_ignore)
+        self.text_opacity_slider.setRange(20, 100)
+        current_txt_op = int(self.settings_manager.settings.get("text_opacity", 1.0) * 100)
+        self.text_opacity_slider.setValue(current_txt_op)
+        self.text_opacity_val_label = QLabel(f"{self.text_opacity_slider.value()}%")
+        self.text_opacity_val_label.setFixedWidth(36)
+        self.text_opacity_slider.valueChanged.connect(lambda v: self.text_opacity_val_label.setText(f"{v}%"))
+        txt_op_row.addWidget(self.text_opacity_slider); txt_op_row.addWidget(self.text_opacity_val_label)
+        left_layout.addLayout(txt_op_row)
 
         left_layout.addWidget(QLabel(get_translation("delay_label", lang)))
         dl_row = QHBoxLayout()
@@ -258,22 +278,22 @@ class ConfigWindow(QDialog):
 
         sep_tts = QFrame(); sep_tts.setFrameShape(QFrame.Shape.HLine); sep_tts.setStyleSheet("color: #333; margin: 6px 0;")
         left_layout.addWidget(sep_tts)
-        section_label("Voz do Bot (TTS)", left_layout, "settings.svg")
+        section_label(get_translation("tts_section", lang), left_layout, "settings.svg")
 
-        self.tts_enable_check = QCheckBox("Ativar Leitura de Chat (TTS)")
+        self.tts_enable_check = QCheckBox(get_translation("tts_enable_label", lang))
         self.tts_enable_check.setChecked(self.settings_manager.settings.get("tts_enabled", True))
         left_layout.addWidget(self.tts_enable_check)
 
         # --- Seletor de Motor de Voz ---
         engine_row = QHBoxLayout()
-        engine_lbl = QLabel("Motor de Voz:")
+        engine_lbl = QLabel(get_translation("tts_engine_label", lang))
         engine_lbl.setStyleSheet("font-weight: bold; color: #ccc;")
         engine_row.addWidget(engine_lbl)
         self.combo_tts_engine = QComboBox()
         self.combo_tts_engine.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.combo_tts_engine.installEventFilter(_wheel_ignore)
-        self.combo_tts_engine.addItem("Microsoft Edge (Neural)", "edge")
-        self.combo_tts_engine.addItem("Google TTS (Alternativo)", "google")
+        self.combo_tts_engine.addItem(get_translation("tts_engine_edge", lang), "edge")
+        self.combo_tts_engine.addItem(get_translation("tts_engine_google", lang), "google")
         current_engine = self.settings_manager.settings.get("tts_engine", "edge")
         idx_engine = self.combo_tts_engine.findData(current_engine)
         if idx_engine >= 0:
@@ -281,13 +301,13 @@ class ConfigWindow(QDialog):
         engine_row.addWidget(self.combo_tts_engine)
         left_layout.addLayout(engine_row)
 
-        self._google_info_label = QLabel("Google: voz unica (pt-BR), ignora selecao de voz por plataforma")
+        self._google_info_label = QLabel(get_translation("google_tts_info", lang))
         self._google_info_label.setStyleSheet("color: #facc15; font-size: 10px; margin-left: 4px;")
         self._google_info_label.setWordWrap(True)
         left_layout.addWidget(self._google_info_label)
 
         vol_row = QHBoxLayout()
-        vol_row.addWidget(QLabel("Volume da Voz"))
+        vol_row.addWidget(QLabel(get_translation("tts_volume_label", lang)))
         self.tts_volume_slider = QSlider(Qt.Orientation.Horizontal)
         self.tts_volume_slider.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.tts_volume_slider.installEventFilter(_wheel_ignore)
@@ -301,9 +321,9 @@ class ConfigWindow(QDialog):
         left_layout.addLayout(vol_row)
 
         self.voices_list = [
-            ("Antônio (Masculino)", "pt-BR-AntonioNeural"),
-            ("Francisca (Feminina)", "pt-BR-FranciscaNeural"),
-            ("Thalita (Feminina)", "pt-BR-ThalitaMultilingualNeural")
+            (get_translation("voice_antonio", lang), "pt-BR-AntonioNeural"),
+            (get_translation("voice_francisca", lang), "pt-BR-FranciscaNeural"),
+            (get_translation("voice_thalita", lang), "pt-BR-ThalitaMultilingualNeural")
         ]
         
         def create_voice_combo(platform_name, config_key, default_voice):
@@ -526,7 +546,7 @@ class ConfigWindow(QDialog):
         hk1.addWidget(icon_lbl1)
         hk1.addWidget(QLabel(get_translation("hotkey_toggle", lang)))
         hk1.addWidget(create_info_btn("info_toggle"))
-        self.hotkey_toggle_field = HotkeyField()
+        self.hotkey_toggle_field = HotkeyField(lang=lang)
         self.hotkey_toggle_field.setText(self.settings_manager.settings.get("hotkey_toggle_visibility", "ctrl+shift+h"))
         hk1.addWidget(self.hotkey_toggle_field)
         right_layout.addLayout(hk1)
@@ -538,7 +558,7 @@ class ConfigWindow(QDialog):
         hk2.addWidget(icon_lbl2)
         hk2.addWidget(QLabel(get_translation("hotkey_clear", lang)))
         hk2.addWidget(create_info_btn("info_clear"))
-        self.hotkey_clear_field = HotkeyField()
+        self.hotkey_clear_field = HotkeyField(lang=lang)
         self.hotkey_clear_field.setText(self.settings_manager.settings.get("hotkey_clear_chat", "ctrl+shift+c"))
         hk2.addWidget(self.hotkey_clear_field)
         right_layout.addLayout(hk2)
@@ -551,7 +571,7 @@ class ConfigWindow(QDialog):
         hk3.addWidget(icon_lbl3)
         hk3.addWidget(QLabel(get_translation("hotkey_clickthrough", lang)))
         hk3.addWidget(create_info_btn("info_clickthrough"))
-        self.hotkey_clickthrough_field = HotkeyField()
+        self.hotkey_clickthrough_field = HotkeyField(lang=lang)
         self.hotkey_clickthrough_field.setText(self.settings_manager.settings.get("hotkey_clickthrough", "ctrl+alt+t"))
         hk3.addWidget(self.hotkey_clickthrough_field)
         right_layout.addLayout(hk3)
@@ -622,10 +642,11 @@ class ConfigWindow(QDialog):
 
     def _update_tiktok_login_ui(self):
         """Atualiza o visual do botão e label de acordo com o estado de login."""
+        lang = self.settings_manager.settings.get("language", "pt-br")
         if self.tiktok_session_id:
-            self.tiktok_login_status_lbl.setText("TikTok: Conectado")
+            self.tiktok_login_status_lbl.setText(get_translation("tiktok_connected_status", lang))
             self.tiktok_login_status_lbl.setStyleSheet("color: #00cc66; font-size: 10px; font-weight: bold;")
-            self.tiktok_login_btn.setText("Conectado")
+            self.tiktok_login_btn.setText(get_translation("tiktok_connected_btn", lang))
             self.tiktok_login_btn.setStyleSheet("""
                 QPushButton {
                     background-color: #1a7a45;
@@ -636,9 +657,9 @@ class ConfigWindow(QDialog):
                 QPushButton:hover { background-color: #c0392b; color: white; }
             """)
         else:
-            self.tiktok_login_status_lbl.setText("TikTok: Nao conectado")
+            self.tiktok_login_status_lbl.setText(get_translation("tiktok_not_connected_status", lang))
             self.tiktok_login_status_lbl.setStyleSheet("color: #ff8888; font-size: 10px;")
-            self.tiktok_login_btn.setText("Fazer Login no TikTok")
+            self.tiktok_login_btn.setText(get_translation("tiktok_login_btn", lang))
             self.tiktok_login_btn.setStyleSheet("""
                 QPushButton {
                     background-color: #fe2c55;
@@ -651,11 +672,12 @@ class ConfigWindow(QDialog):
 
     def _handle_tiktok_login_click(self):
         """Gerencia o clique no botão: se já conectado, pergunta se quer desconectar."""
+        lang = self.settings_manager.settings.get("language", "pt-br")
         if self.tiktok_session_id:
             reply = QMessageBox.question(
                 self,
-                "Desconectar do TikTok?",
-                "Você já está conectado.\n\nDeseja remover a conta e desconectar?\n(Lives +18 perderão o horario real)",
+                get_translation("tiktok_disconnect_title", lang),
+                get_translation("tiktok_disconnect_msg", lang),
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                 QMessageBox.StandardButton.No
             )
@@ -669,46 +691,34 @@ class ConfigWindow(QDialog):
 
     def _open_tiktok_login(self):
         """Mostra aviso e abre o mini-navegador para o usuário fazer login no TikTok."""
+        lang = self.settings_manager.settings.get("language", "pt-br")
         msg_box = QMessageBox(self)
-        msg_box.setWindowTitle("Por que fazer login no TikTok?")
+        msg_box.setWindowTitle(get_translation("tiktok_why_login_title", lang))
         msg_box.setIcon(QMessageBox.Icon.Information)
-        msg_box.setText(
-            "<b>O login no TikTok é opcional.</b><br><br>"
-
-            "<b>🕐 Cronômetro preciso:</b> Necessário para o relógio mostrar o tempo total da live "
-            "em transmissões com restrição de idade (+18) ou caso você conecte atrasado. "
-            "Sem o login, o relógio começa sempre do <b>00:00:00</b> no momento em que você conectar.<br><br>"
-
-            "<b>👥 Aba de Espectadores Online:</b> Com o login ativo, uma aba dedicada exibe "
-            "em tempo real <b>todos os usuários presentes na sua live</b> — com foto de perfil, "
-            "nome, @username e pontos de contribuição. "
-            "Ideal para agradecer a todos no encerramento da live lendo os nomes.<br><br>"
-
-            "<b>Recomendado:</b> use uma conta secundária do TikTok para login, nunca a conta principal.<br><br>"
-            "<i>🔒 <b>Sua Privacidade:</b> Não salvamos sua senha. Os dados de login ficam apenas neste computador, em um arquivo local criptografado pelo próprio windows.</i>"
-        )
-        btn_continuar = msg_box.addButton("Continuar", QMessageBox.ButtonRole.AcceptRole)
-        btn_cancelar = msg_box.addButton("Cancelar", QMessageBox.ButtonRole.RejectRole)
+        msg_box.setText(get_translation("tiktok_why_login_text", lang))
+        btn_continuar = msg_box.addButton(get_translation("continue_btn", lang), QMessageBox.ButtonRole.AcceptRole)
+        btn_cancelar = msg_box.addButton(get_translation("cancel_btn", lang), QMessageBox.ButtonRole.RejectRole)
         
         msg_box.exec()
         
         if msg_box.clickedButton() == btn_continuar:
             try:
                 from ui.tiktok_login_dialog import TikTokLoginDialog
-                dialog = TikTokLoginDialog(self)
+                dialog = TikTokLoginDialog(self, lang=lang)
                 dialog.login_success.connect(self._on_tiktok_login_success)
                 dialog.exec()
             except ImportError as e:
-                QMessageBox.warning(self, "Erro", f"PyQt6-WebEngine nao esta instalado.\nInstale com: pip install PyQt6-WebEngine\n\n{e}")
+                QMessageBox.warning(self, "Error", get_translation("tiktok_login_error_webengine", lang, error=str(e)))
 
     def _on_tiktok_login_success(self, session_id):
         """Chamado quando o login é detectado — salva o sessionid imediatamente."""
+        lang = self.settings_manager.settings.get("language", "pt-br")
         self.tiktok_session_id = session_id
         self.settings_manager.settings["tiktok_session_id"] = session_id
         
         self.settings_manager.save_settings()
         self._update_tiktok_login_ui()
-        QMessageBox.information(self, "Sucesso!", "Login no TikTok realizado com sucesso!\nSuas lives +18 agora vao mostrar o horario real.", QMessageBox.StandardButton.Ok)
+        QMessageBox.information(self, "OK", get_translation("tiktok_login_success", lang), QMessageBox.StandardButton.Ok)
 
     def confirm_quit(self):
         lang = self.settings_manager.settings.get("language", "pt-br")
@@ -722,6 +732,7 @@ class ConfigWindow(QDialog):
             QApplication.quit()
 
     def _add_config_field_to(self, key, label_text, target_layout):
+        lang = self.settings_manager.settings.get("language", "pt-br")
         h_layout = QHBoxLayout()
         label = QLabel(label_text)
         label.setMinimumWidth(120)
@@ -730,10 +741,10 @@ class ConfigWindow(QDialog):
         line_edit.setSizePolicy(line_edit.sizePolicy().horizontalPolicy(), line_edit.sizePolicy().verticalPolicy())
         # Dica visual de formato esperado para cada plataforma (sem @ para evitar erro)
         placeholders = {
-            "tiktok":   "SeuArrobaAqui (sem @)",
-            "twitch":   "SeuArrobaAqui (sem @)",
-            "kick":     "SeuArrobaAqui (sem @)",
-            "youtube":  "SeuArrobaAqui (sem @)",
+            "tiktok":   get_translation("placeholder_username", lang),
+            "twitch":   get_translation("placeholder_username", lang),
+            "kick":     get_translation("placeholder_username", lang),
+            "youtube":  get_translation("placeholder_username", lang),
         }
         if key in placeholders:
             line_edit.setPlaceholderText(placeholders[key])
@@ -748,7 +759,7 @@ class ConfigWindow(QDialog):
         reconnect_btn = QPushButton()
         reconnect_icon_path = resource_path("assets/reconnect.svg")
         reconnect_btn.setIcon(QIcon(reconnect_icon_path))
-        reconnect_btn.setToolTip(f"Reconectar {label_text}")
+        reconnect_btn.setToolTip(get_translation("reconnect_tooltip", lang, label=label_text))
         reconnect_btn.setFixedSize(22, 22)
         reconnect_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         reconnect_btn.setStyleSheet("""
@@ -850,7 +861,13 @@ class ConfigWindow(QDialog):
         self.settings_manager.settings["kick"] = self.kick_input.text().strip()
         self.settings_manager.settings["youtube"] = self.youtube_input.text().strip()
         
-        self.settings_manager.settings["opacity"] = self.opacity_slider.value() / 100.0
+        bg_op = self.bg_opacity_slider.value() / 100.0
+        self.settings_manager.settings["bg_opacity"] = bg_op
+        self.settings_manager.settings["opacity"] = bg_op # Compatibilidade
+        
+        text_op = self.text_opacity_slider.value() / 100.0
+        self.settings_manager.settings["text_opacity"] = text_op
+        
         self.settings_manager.settings["glassmorphism"] = self.glass_check.isChecked()
         self.settings_manager.settings["message_delay"] = self.delay_slider.value() / 10.0
         

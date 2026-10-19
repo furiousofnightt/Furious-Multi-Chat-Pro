@@ -65,6 +65,8 @@ def main():
         window.viewers_page._settings_manager = settings
         window.viewers_page.refresh_state()
     chat_manager = ChatManager(settings, window)
+    # Injeta referência do chat_manager na janela para que request_sync_viewers funcione
+    window._chat_manager = chat_manager
     
     # --- HOTKEY MANAGER ---
     hotkey_manager = HotkeyManager(settings)
@@ -101,7 +103,6 @@ def main():
         config_ui = ConfigWindow(settings, window, chat_manager)
         if config_ui.exec():
             # Sempre avalia mudanças visuais em tempo real sem precisar reconectar chat
-            window.setWindowOpacity(settings.settings.get("opacity", 0.85))
             window.apply_theme(settings.settings)
             if hasattr(window, 'viewers_page') and window.viewers_page:
                 window.viewers_page.refresh_state()
@@ -130,7 +131,6 @@ def main():
     
     window.settings_requested.connect(open_config)
     # Aplicar configurações iniciais ANTES de mostrar
-    window.setWindowOpacity(settings.settings.get("opacity", 0.85))
     window.apply_theme(settings.settings)
     
     # Sincroniza o botão de Fixar com o setting salvo

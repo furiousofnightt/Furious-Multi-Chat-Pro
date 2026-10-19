@@ -161,6 +161,113 @@ class TikTokHandler(BaseChatHandler):
 
         self.viewers_list_updated.emit(final_list)
 
+    def request_sync_now(self):
+        """Força uma sincronização imediata dos espectadores online. Chamado pelo botão 'Sincronizar' da UI.
+        
+        Sem fallbacks de memória — sempre busca dados frescos diretamente da API do TikTok.
+        """
+        if not self.is_running or not getattr(self, '_already_connected', False):
+            print("[Espectadores] ⚠️ TikTok offline: não conectado à live.", flush=True)
+            return
+        if not getattr(self, 'loop', None):
+            return
+
+        async def _one_shot_sync():
+            try:
+                from core.settings_manager import SettingsManager
+                settings_manager = SettingsManager()
+                session_id = settings_manager.settings.get('tiktok_session_id', '')
+                if not session_id:
+                    print("[Espectadores] ⚠️ Sincronização cancelada: sessionid TikTok ausente.", flush=True)
+                    return
+
+                rid = getattr(self.client, 'room_id', None) if self.client else None
+                anchor_id = getattr(self, '_anchor_id', None)
+                if rid and not anchor_id and self.client:
+                    try:
+                        r_dict = await self.client.web.fetch_room_info(room_id=rid)
+                        if isinstance(r_dict, dict):
+                            owner = r_dict.get('owner', {})
+                            self._anchor_id = owner.get('id', '') or owner.get('id_str', '')
+                            self._sec_anchor_id = owner.get('sec_uid', '')
+                            anchor_id = self._anchor_id
+                    except Exception:
+                        pass
+
+                if not rid or not anchor_id:
+                    print("[Espectadores] ⚠️ Sincronização cancelada: dados da sala ausentes.", flush=True)
+                    return
+
+                url = (
+                    f"https://webcast.tiktok.com/webcast/ranklist/online_audience/"
+                    f"?aid=1988&device_platform=web_pc&room_id={rid}"
+                    f"&anchor_id={anchor_id}&sec_anchor_id={getattr(self, '_sec_anchor_id', '')}"
+                )
+                headers = {
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                    "Referer": f"https://www.tiktok.com/@{self.username}/live"
+                }
+                cookies = {'sessionid': session_id}
+                import httpx as _httpx
+                async with _httpx.AsyncClient(headers=headers, cookies=cookies, timeout=8.0) as hc:
+                    resp = await hc.get(url)
+                    if resp.status_code == 200:
+                        try:
+                            data = resp.json()
+                        except Exception:
+                            return
+                        d = data.get('data', {})
+                        ranks = d.get('ranks', [])
+                        total_in_room = d.get('total', 0)
+                        # Emite lista vazia se API retornou vazia — sem fallback de memória
+                        if not ranks:
+                            print(f"[Espectadores] ✅ Sincronizado: 0 online.", flush=True)
+                            self.viewers_list_updated.emit([])
+                            return
+                        viewers_list = []
+                        for idx, rk in enumerate(ranks):
+                            user = rk.get('user', {})
+                            if not user:
+                                continue
+                            user_id = str(user.get('id', '') or '')
+                            nickname = str(user.get('nickname', '') or user.get('nick_name', '') or user.get('display_id', '') or 'Usuário')
+                            display_id = str(user.get('display_id', '') or user.get('unique_id', '') or '')
+                            score = rk.get('score', 0)
+                            avatar_urls = []
+                            for av_field in ['avatar_thumb', 'avatar_medium', 'avatar_large', 'avatar_168x168', 'avatar_300x300', 'avatar_jpg']:
+                                av_obj = user.get(av_field)
+                                if av_obj:
+                                    if isinstance(av_obj, dict):
+                                        u_list = av_obj.get('url_list') or av_obj.get('urls_list') or []
+                                        for u in u_list:
+                                            if u and u not in avatar_urls:
+                                                avatar_urls.append(u)
+                                    elif isinstance(av_obj, str) and av_obj.startswith('http'):
+                                        if av_obj not in avatar_urls:
+                                            avatar_urls.append(av_obj)
+                            avatar_url = avatar_urls[0] if avatar_urls else ''
+                            viewers_list.append({
+                                'rank': idx + 1,
+                                'user_id': user_id,
+                                'nickname': nickname,
+                                'display_id': display_id,
+                                'score': score,
+                                'avatar_url': avatar_url,
+                                'avatar_urls': avatar_urls,
+                                'total_online': total_in_room
+                            })
+                        if self.is_running:
+                            print(f"[Espectadores] ✅ Sincronizado: {len(viewers_list)} online ({total_in_room} na live).", flush=True)
+                            self.viewers_list_updated.emit(viewers_list)
+                    else:
+                        print(f"[Espectadores] ⚠️ TikTok API erro HTTP {resp.status_code}.", flush=True)
+            except Exception as e:
+                print(f"[Espectadores] ❌ Erro ao sincronizar: {e}", flush=True)
+                # Sem fallback — não emite dados velhos
+
+        import asyncio as _asyncio
+        _asyncio.run_coroutine_threadsafe(_one_shot_sync(), self.loop)
+
     def start_with_loop(self, loop):
         self.loop = loop
         self.is_running = True
@@ -1115,30 +1222,52 @@ class TikTokHandler(BaseChatHandler):
                 async def _sync_online_audience_loop():
                     """Busca a lista completa de todos os espectadores online via webcast API.
 
-                    Requer autenticação TikTok (sessionid). Se não houver sessionid,
-                    o loop encerra imediatamente sem fazer nenhuma requisição ao TikTok,
-                    evitando erros 401/403/429.
+                    Requer autenticação TikTok (sessionid). Atualiza sessionid dinamicamente
+                    caso o usuário faça login após o aplicativo já ter iniciado.
                     """
-                    # Early-exit: sem sessionid, a API /online_audience/ requer login.
-                    # Não fazemos NENHUMA requisição para não arriscar 429 ou banimento.
-                    if not session_id:
-                        print(
-                            "ℹ️ [Espectadores] Sem login TikTok — aba de usuários online desativada. "
-                            "Faça login em Configurações → TikTok para ativar.",
-                            flush=True
-                        )
-                        return  # Para completamente — sem loop, sem requisições
+                    _auth_warned = False
+                    while self.is_running:
+                        if not getattr(self, '_already_connected', False):
+                            await asyncio.sleep(2.0)
+                            continue
 
-                    while self.is_running and self._already_connected:
+                        # Atualiza session_id dinamicamente das configurações
+                        curr_session_id = None
+                        try:
+                            from core.settings_manager import SettingsManager
+                            curr_session_id = SettingsManager().settings.get('tiktok_session_id', '') or session_id
+                        except Exception:
+                            curr_session_id = session_id
+
+                        if not curr_session_id:
+                            if not _auth_warned:
+                                print(
+                                    "ℹ️ [Espectadores] Sem login TikTok — faça login em Configurações → TikTok para ver os espectadores online.",
+                                    flush=True
+                                )
+                                _auth_warned = True
+                            await asyncio.sleep(6.0)
+                            continue
+
                         try:
                             rid = getattr(self.client, 'room_id', None)
+                            if rid and not getattr(self, '_anchor_id', None) and self.client:
+                                try:
+                                    r_dict = await self.client.web.fetch_room_info(room_id=rid)
+                                    if isinstance(r_dict, dict):
+                                        owner = r_dict.get('owner', {})
+                                        self._anchor_id = owner.get('id', '') or owner.get('id_str', '')
+                                        self._sec_anchor_id = owner.get('sec_uid', '')
+                                except Exception:
+                                    pass
+
                             if rid and getattr(self, '_anchor_id', None):
                                 url = f"https://webcast.tiktok.com/webcast/ranklist/online_audience/?aid=1988&device_platform=web_pc&room_id={rid}&anchor_id={self._anchor_id}&sec_anchor_id={getattr(self, '_sec_anchor_id', '')}"
                                 headers = {
                                     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
                                     "Referer": f"https://www.tiktok.com/@{self.username}/live"
                                 }
-                                cookies = {'sessionid': session_id}
+                                cookies = {'sessionid': curr_session_id}
                                 try:
                                     async with httpx.AsyncClient(headers=headers, cookies=cookies, timeout=6.0) as hc:
                                         resp = await hc.get(url)

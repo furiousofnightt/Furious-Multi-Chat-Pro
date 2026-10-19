@@ -1,26 +1,12 @@
 import sys
 import ctypes
-from ctypes.wintypes import DWORD, ULONG
 
-class ACCENT_POLICY(ctypes.Structure):
-    _fields_ = [
-        ('AccentState', DWORD),
-        ('AccentFlags', DWORD),
-        ('GradientColor', DWORD),
-        ('AnimationId', DWORD)
-    ]
-
-class WINDOWCOMPOSITIONATTRIBDATA(ctypes.Structure):
-    _fields_ = [
-        ('Attribute', DWORD),
-        ('Data', ctypes.POINTER(ACCENT_POLICY)),
-        ('SizeOfData', ULONG)
-    ]
-
-def apply_blur(hwnd, enable=True, hex_color="#00000000"):
+def apply_blur(hwnd, enable=True, hex_color="#121212AA"):
     """
-    Aplica o efeito Acrylic/Mica nativo do Windows 11/10 na janela.
-    Requer que a janela tenha Qt::WA_TranslucentBackground ativado.
+    Aplica cantos arredondados e modo escuro nativo no Windows 11/10 via DWMAPI oficial.
+    A transparência fumê/translúcida no Windows 10 e 11 é gerenciada com 100% de
+    fidelidade visual diretamente pelo canal alfa do PyQt6 (Qt::WA_TranslucentBackground),
+    sem chamar APIs não documentadas da user32 (evitando falsos positivos de antivírus).
     """
     if sys.platform != 'win32':
         return
@@ -28,46 +14,47 @@ def apply_blur(hwnd, enable=True, hex_color="#00000000"):
     try:
         HWND = int(hwnd)
         
-        # Tenta aplicar Mica/Acrylic nativo do Windows 11 (DWM)
+        # 1. Ativar Immersive Dark Mode no DWM (evita qualquer moldura ou borda clara)
+        # Atributo 20 = Windows 11 / Windows 10 build recente, Atributo 19 = Windows 10 1809
+        for attr in (20, 19):
+            try:
+                dark_mode = ctypes.c_int(1)
+                ctypes.windll.dwmapi.DwmSetWindowAttribute(
+                    HWND, attr, ctypes.byref(dark_mode), ctypes.sizeof(dark_mode)
+                )
+            except Exception:
+                pass
+
+        # 2. Se for Windows 11, aplicar cantos arredondados e desativar backdrop leitoso
         try:
-            DWMWA_SYSTEMBACKDROP_TYPE = 38
-            # 1 = Default, 2 = Mica, 3 = Acrylic, 4 = Mica Alt
-            backdrop_type = ctypes.c_int(3 if enable else 1)
-            ctypes.windll.dwmapi.DwmSetWindowAttribute(
-                HWND, DWMWA_SYSTEMBACKDROP_TYPE, ctypes.byref(backdrop_type), ctypes.sizeof(backdrop_type)
-            )
-            
-            # Forçar cantos arredondados bonitos no W11
-            DWMWA_WINDOW_CORNER_PREFERENCE = 33
-            DWMWCP_ROUND = 2
-            corner = ctypes.c_int(DWMWCP_ROUND if enable else 0)
-            ctypes.windll.dwmapi.DwmSetWindowAttribute(
-                HWND, DWMWA_WINDOW_CORNER_PREFERENCE, ctypes.byref(corner), ctypes.sizeof(corner)
-            )
+            is_win11 = sys.getwindowsversion().build >= 22000
         except Exception:
-            pass # Pode falhar se for W10 antigo
-            
-        # Fallback para SetWindowCompositionAttribute (Windows 10/11)
-        accent = ACCENT_POLICY()
-        # 3 = Blur, 4 = Acrylic
-        accent.AccentState = 4 if enable else 0
-        accent.AccentFlags = 2 # Ativa a cor de gradiente
-        
-        if hex_color.startswith('#'):
-            hex_color = hex_color.lstrip('#')
-            if len(hex_color) == 6:
-                hex_color += '00'
-            if len(hex_color) == 8:
-                # Padrão W11 DWM para ABGR
-                r, g, b, a = hex_color[0:2], hex_color[2:4], hex_color[4:6], hex_color[6:8]
-                abgr = f"{a}{b}{g}{r}"
-                accent.GradientColor = int(abgr, 16)
-        
-        data = WINDOWCOMPOSITIONATTRIBDATA()
-        data.Attribute = 19
-        data.SizeOfData = ctypes.sizeof(accent)
-        data.Data = ctypes.pointer(accent)
-        
-        ctypes.windll.user32.SetWindowCompositionAttribute(HWND, ctypes.byref(data))
+            is_win11 = False
+
+        if is_win11:
+            try:
+                # 1 = DWMSBT_NONE: Remove a névoa esbranquiçada/leitosa do DWM,
+                # permitindo que o fundo fumê do Qt apareça com nitidez e cores exatas
+                DWMWA_SYSTEMBACKDROP_TYPE = 38
+                backdrop_type = ctypes.c_int(1)
+                ctypes.windll.dwmapi.DwmSetWindowAttribute(
+                    HWND, DWMWA_SYSTEMBACKDROP_TYPE, ctypes.byref(backdrop_type), ctypes.sizeof(backdrop_type)
+                )
+                
+                # Cantos arredondados nativos do Windows 11
+                DWMWA_WINDOW_CORNER_PREFERENCE = 33
+                DWMWCP_ROUND = 2
+                corner = ctypes.c_int(DWMWCP_ROUND if enable else 0)
+                ctypes.windll.dwmapi.DwmSetWindowAttribute(
+                    HWND, DWMWA_WINDOW_CORNER_PREFERENCE, ctypes.byref(corner), ctypes.sizeof(corner)
+                )
+            except Exception:
+                pass
+
+        # No Windows 10, a transparência translúcida escura é gerenciada
+        # nativamente pelo PyQt6 (WA_TranslucentBackground + background-color: rgba(...)),
+        # garantindo visual limpo sem ruído e sem disparar alertas de segurança.
+
     except Exception as e:
-        print(f"Aviso: Não foi possível aplicar Glassmorphism nativo no SO ({e})")
+        print(f"Aviso: Não foi possível aplicar atributos visuais DWM ({e})")
+

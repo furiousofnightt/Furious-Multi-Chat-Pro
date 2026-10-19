@@ -510,6 +510,7 @@ class OnlineViewersListWidget(QWidget):
     """Página completa que lista os espectadores online do TikTok com header, botões e scroll."""
     back_requested = pyqtSignal()
     open_settings_requested = pyqtSignal()
+    sync_requested = pyqtSignal()
 
     def __init__(self, parent=None, settings_manager=None):
         super().__init__(parent)
@@ -534,8 +535,10 @@ class OnlineViewersListWidget(QWidget):
         top_layout.setContentsMargins(8, 5, 8, 5)
         top_layout.setSpacing(10)
 
+        lang = self._get_lang()
+
         # Botão voltar para o chat
-        self.back_btn = QPushButton(" Voltar ao Chat")
+        self.back_btn = QPushButton(" " + get_translation("btn_back_to_chat", lang))
         self.back_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         icon_back = QIcon(resource_path("assets/back_arrow.svg"))
         if not icon_back.isNull():
@@ -568,7 +571,7 @@ class OnlineViewersListWidget(QWidget):
         fb_layout.setSpacing(3)
 
         self.font_dec_btn = QPushButton("A-")
-        self.font_dec_btn.setToolTip("Diminuir tamanho da fonte dos usuários")
+        self.font_dec_btn.setToolTip(get_translation("tooltip_font_decrease", lang))
         self.font_dec_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.font_dec_btn.setStyleSheet("""
             QPushButton {
@@ -590,7 +593,7 @@ class OnlineViewersListWidget(QWidget):
         fb_layout.addWidget(self.font_dec_btn)
 
         self.font_inc_btn = QPushButton("A+")
-        self.font_inc_btn.setToolTip("Aumentar tamanho da fonte dos usuários")
+        self.font_inc_btn.setToolTip(get_translation("tooltip_font_increase", lang))
         self.font_inc_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.font_inc_btn.setStyleSheet("""
             QPushButton {
@@ -613,6 +616,41 @@ class OnlineViewersListWidget(QWidget):
 
         top_layout.addWidget(font_box)
 
+        # Botão de Sincronização Manual dos Espectadores
+        self.sync_btn = QPushButton(" " + get_translation("btn_sync", lang))
+        self.sync_btn.setToolTip(get_translation("tooltip_sync_viewers", lang))
+        self.sync_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        icon_sync = QIcon(resource_path("assets/sync.svg"))
+        if not icon_sync.isNull():
+            self.sync_btn.setIcon(icon_sync)
+            self.sync_btn.setIconSize(QSize(14, 14))
+        self.sync_btn.setStyleSheet("""
+            QPushButton {
+                background-color: rgba(0, 230, 230, 25);
+                color: #00e6e6;
+                border: 1px solid rgba(0, 230, 230, 80);
+                border-radius: 5px;
+                padding: 4px 10px;
+                font-weight: bold;
+                font-size: 11px;
+            }
+            QPushButton:hover {
+                background-color: rgba(0, 230, 230, 60);
+                border: 1px solid rgba(0, 230, 230, 180);
+                color: #ffffff;
+            }
+            QPushButton:pressed {
+                background-color: rgba(0, 230, 230, 100);
+            }
+            QPushButton:disabled {
+                background-color: rgba(255, 255, 255, 10);
+                color: #777777;
+                border: 1px solid rgba(255, 255, 255, 20);
+            }
+        """)
+        self.sync_btn.clicked.connect(self.trigger_sync)
+        top_layout.addWidget(self.sync_btn)
+
         top_layout.addStretch()
 
         # Ícone e Título / Contador
@@ -625,7 +663,7 @@ class OnlineViewersListWidget(QWidget):
         self.users_icon_lbl.setStyleSheet("background: transparent; border: none;")
         top_layout.addWidget(self.users_icon_lbl)
 
-        self.title_count_lbl = QLabel("0 online (TikTok)")
+        self.title_count_lbl = QLabel(get_translation("viewers_online_format", lang, count=0))
         self.title_count_lbl.setStyleSheet("color: #ffffff; font-weight: bold; font-size: 12px; background: transparent; border: none;")
         top_layout.addWidget(self.title_count_lbl)
 
@@ -682,6 +720,12 @@ class OnlineViewersListWidget(QWidget):
             return self.parent().settings_manager
         return None
 
+    def _get_lang(self):
+        sm = self._get_settings_manager()
+        if sm and hasattr(sm, 'settings'):
+            return sm.settings.get('language', 'pt-br')
+        return 'pt-br'
+
     def _is_logged_in(self) -> bool:
         """Verifica se há um sessionid TikTok válido nas configurações."""
         sm = self._get_settings_manager()
@@ -697,6 +741,27 @@ class OnlineViewersListWidget(QWidget):
             user = sm.settings.get('tiktok', '')
             return bool(user and str(user).strip())
         return False
+
+    def trigger_sync(self):
+        """Dispara a sincronização manual e dá feedback visual imediato no próprio botão."""
+        if not self._is_logged_in():
+            print("[Espectadores] ⚠️ Login TikTok necessário para sincronizar.", flush=True)
+            self.show_no_login_banner('no_login')
+            return
+
+        lang = self._get_lang()
+        self.sync_btn.setEnabled(False)
+        self.sync_btn.setText(" " + get_translation("btn_syncing", lang))
+        self.sync_requested.emit()
+
+        # Reabilita o botão após 2.5s para evitar flood na API
+        QTimer.singleShot(2500, self._reset_sync_btn)
+
+    def _reset_sync_btn(self):
+        if hasattr(self, 'sync_btn') and self.sync_btn:
+            lang = self._get_lang()
+            self.sync_btn.setEnabled(True)
+            self.sync_btn.setText(" " + get_translation("btn_sync", lang))
 
     def refresh_state(self):
         """Atualiza o estado visual da lista caso não haja cards de espectadores ativos."""
@@ -717,19 +782,20 @@ class OnlineViewersListWidget(QWidget):
     def clear_viewers(self):
         """Limpa todos os espectadores da lista e reseta o contador."""
         if hasattr(self, 'title_count_lbl'):
-            self.title_count_lbl.setText("0 online (TikTok)")
+            self.title_count_lbl.setText(get_translation("viewers_online_format", self._get_lang(), count=0))
         self.show_empty_placeholder()
 
     def show_empty_placeholder(self):
         """Exibe o placeholder padrão quando logado mas sem lista recebida ainda."""
+        lang = self._get_lang()
         if hasattr(self, 'title_count_lbl'):
-            self.title_count_lbl.setText("0 online (TikTok)")
+            self.title_count_lbl.setText(get_translation("viewers_online_format", lang, count=0))
         while self.list_layout.count() > 0:
             item = self.list_layout.takeAt(0)
             if item and item.widget():
                 item.widget().deleteLater()
 
-        self.empty_lbl = QLabel("Nenhum espectador na lista no momento.\nOs usuários aparecerão aqui durante a live.")
+        self.empty_lbl = QLabel(get_translation("viewers_empty", lang))
         self.empty_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.empty_lbl.setStyleSheet(
             "color: #777777; font-size: 12px; padding: 40px 10px; "
@@ -744,9 +810,10 @@ class OnlineViewersListWidget(QWidget):
         mode='no_login'    → avisa para fazer login TikTok nas Configurações
         mode='no_username' → avisa que o canal TikTok não está configurado
         """
+        lang = self._get_lang()
         # Limpa lista atual e zera contagem
         if hasattr(self, 'title_count_lbl'):
-            self.title_count_lbl.setText("0 online (TikTok)")
+            self.title_count_lbl.setText(get_translation("viewers_online_format", lang, count=0))
         while self.list_layout.count() > 0:
             item = self.list_layout.takeAt(0)
             if item and item.widget():
@@ -754,22 +821,13 @@ class OnlineViewersListWidget(QWidget):
 
         # Textos conforme modo
         if mode == 'no_username':
-            title_text = "TikTok não configurado"
-            desc_text = (
-                "Nenhum canal TikTok está configurado.\n\n"
-                "Abra as Configurações e insira o\n"
-                "@username do canal para conectar."
-            )
-            hint_text = "Configurações → campo TikTok → @username"
+            title_text = get_translation("tiktok_not_configured_title", lang)
+            desc_text = get_translation("tiktok_not_configured_desc", lang)
+            hint_text = get_translation("tiktok_not_configured_hint", lang)
         else:  # no_login
-            title_text = "Login TikTok necessário"
-            desc_text = (
-                "A aba de espectadores online mostra\n"
-                "todos os usuários presentes na sua live.\n\n"
-                "Para acessar, faça login com qualquer\n"
-                "conta TikTok nas Configurações."
-            )
-            hint_text = "Configurações → aba TikTok → Fazer Login"
+            title_text = get_translation("tiktok_login_required_title", lang)
+            desc_text = get_translation("tiktok_login_required_desc", lang)
+            hint_text = get_translation("tiktok_login_required_hint", lang)
 
         # Card de aviso
         banner = QFrame()
@@ -818,7 +876,7 @@ class OnlineViewersListWidget(QWidget):
         banner_layout.addWidget(desc_lbl)
 
         # Botão para abrir Configurações
-        settings_btn = QPushButton("⚙  Abrir Configurações")
+        settings_btn = QPushButton(get_translation("btn_open_settings", lang))
         settings_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         settings_btn.setStyleSheet("""
             QPushButton {
@@ -859,10 +917,14 @@ class OnlineViewersListWidget(QWidget):
     def set_viewers(self, viewers_list):
         if not self._has_tiktok_username() or not viewers_list:
             self.clear_viewers()
+            if hasattr(self, 'sync_btn') and not self.sync_btn.isEnabled():
+                self._reset_sync_btn()
             return
 
         total_online = (viewers_list[0].get('total_online') if viewers_list else 0) or len(viewers_list)
-        self.title_count_lbl.setText(f"{total_online} online (TikTok)")
+        self.title_count_lbl.setText(get_translation("viewers_online_format", self._get_lang(), count=total_online))
+        if hasattr(self, 'sync_btn') and not self.sync_btn.isEnabled():
+            self._reset_sync_btn()
 
         # Checa se os widgets atuais já batem com a lista para atualizar in-place sem lag
         current_cards = []
@@ -992,13 +1054,14 @@ class ChatWindow(QMainWindow):
             QMenu::item:selected { background-color: #555; }
         """)
         
-        settings_action = QAction("Configurações", self)
+        lang = self.settings_manager.settings.get("language", "pt-br") if hasattr(self, "settings_manager") else "pt-br"
+        settings_action = QAction(get_translation("menu_settings", lang), self)
         settings_action.triggered.connect(self.settings_requested.emit)
         
-        clear_action = QAction("Limpar Chat", self)
+        clear_action = QAction(get_translation("menu_clear_chat", lang), self)
         clear_action.triggered.connect(self.clear_chat)
         
-        exit_action = QAction("Sair", self)
+        exit_action = QAction(get_translation("menu_exit", lang), self)
         exit_action.triggered.connect(self.close)
         
         context_menu.addAction(settings_action)
@@ -1020,8 +1083,9 @@ class ChatWindow(QMainWindow):
     def toggle_tts(self):
         if hasattr(self, 'tts_manager'):
             is_muted = self.tts_manager.toggle_mute()
-            status = "Desativada" if is_muted else "Ativada"
-            self.add_message("Sistema", f"🔊 Voz do Bot {status}!", "system")
+            lang = self.settings_manager.settings.get("language", "pt-br") if hasattr(self, "settings_manager") else "pt-br"
+            status = get_translation("bot_voice_disabled", lang) if is_muted else get_translation("bot_voice_enabled", lang)
+            self.add_message(get_translation("system_label", lang), f"🔊 {get_translation('bot_voice_status', lang, status=status)}", "system")
 
     def setup_tray(self):
         """ Configura o ícone na bandeja do sistema (Tray) """
@@ -1035,18 +1099,19 @@ class ChatWindow(QMainWindow):
         
         # Menu do Tray
         tray_menu = QMenu()
+        lang = self.settings_manager.settings.get("language", "pt-br") if hasattr(self, "settings_manager") else "pt-br"
         
-        show_action = QAction(QIcon(resource_path("assets/show.svg")), "Mostrar Chat", self)
+        show_action = QAction(QIcon(resource_path("assets/show.svg")), get_translation("tray_show_chat", lang), self)
         show_action.triggered.connect(self.show_normal)
         tray_menu.addAction(show_action)
         
-        clear_action = QAction(QIcon(resource_path("assets/clear.svg")), "Limpar Chat", self)
+        clear_action = QAction(QIcon(resource_path("assets/clear.svg")), get_translation("tray_clear_chat", lang), self)
         clear_action.triggered.connect(self.clear_chat)
         tray_menu.addAction(clear_action)
         
         tray_menu.addSeparator()
         
-        quit_action = QAction(QIcon(resource_path("assets/exit.svg")), "Fechar App Completamente", self)
+        quit_action = QAction(QIcon(resource_path("assets/exit.svg")), get_translation("tray_quit_app", lang), self)
         quit_action.triggered.connect(QApplication.instance().quit)
         tray_menu.addAction(quit_action)
         
@@ -1212,8 +1277,9 @@ class ChatWindow(QMainWindow):
 
     def quick_exit(self):
         from PyQt6.QtWidgets import QMessageBox, QApplication
-        reply = QMessageBox.question(self, 'Encerrar App', 
-            "Deseja realmente encerrar o aplicativo completamente?",
+        lang = self.settings_manager.settings.get("language", "pt-br") if hasattr(self, "settings_manager") else "pt-br"
+        reply = QMessageBox.question(self, get_translation("confirm_quit_title", lang), 
+            get_translation("confirm_quit_msg", lang),
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, 
             QMessageBox.StandardButton.No)
 
@@ -1226,9 +1292,10 @@ class ChatWindow(QMainWindow):
         # mas permitir fechar totalmente pelo menu do Tray
         if self.tray_icon.isVisible():
             self.hide()
+            lang = self.settings_manager.settings.get("language", "pt-br") if hasattr(self, "settings_manager") else "pt-br"
             self.tray_icon.showMessage(
                 "Furious Multi Chat Pro",
-                "O chat continua rodando em segundo plano.",
+                get_translation("tray_running_bg", lang),
                 QSystemTrayIcon.MessageIcon.Information,
                 2000
             )
@@ -1285,10 +1352,12 @@ class ChatWindow(QMainWindow):
         stats_layout.setContentsMargins(0, 0, 0, 0)
         stats_layout.setSpacing(10)
         
+        lang = self.settings_manager.settings.get("language", "pt-br") if hasattr(self, "settings_manager") else "pt-br"
+
         self.viewers_lbl = QPushButton("-")
         self.viewers_lbl.setIcon(QIcon(resource_path("assets/eye.svg")))
         self.viewers_lbl.setIconSize(QSize(14, 14)) # Ícone um pouco menor
-        self.viewers_lbl.setToolTip("Views (Baseado na plataforma primária)")
+        self.viewers_lbl.setToolTip(get_translation("tooltip_views_primary", lang))
         self.viewers_lbl.setStyleSheet("color: #00e6e6; font-size: 12px; font-weight: bold; background: transparent; padding-top: 0px; border: none; text-align: left;")
         self.viewers_lbl.setCursor(Qt.CursorShape.PointingHandCursor)
         self.viewers_lbl.setFocusPolicy(Qt.FocusPolicy.NoFocus)
@@ -1297,21 +1366,21 @@ class ChatWindow(QMainWindow):
         self.total_views_lbl = QPushButton("-")
         self.total_views_lbl.setIcon(QIcon(resource_path("assets/users.svg")))
         self.total_views_lbl.setIconSize(QSize(14, 14))
-        self.total_views_lbl.setToolTip("Total de Views Acumulados (TikTok)")
+        self.total_views_lbl.setToolTip(get_translation("tooltip_total_views_ttk", lang))
         self.total_views_lbl.setStyleSheet("color: #00e6e6; font-size: 12px; font-weight: bold; background: transparent; padding-top: 0px; border: none; text-align: left;")
         self.total_views_lbl.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         
         self.uptime_lbl = QPushButton("0:00:00")
         self.uptime_lbl.setIcon(QIcon(resource_path("assets/clock.svg")))
         self.uptime_lbl.setIconSize(QSize(14, 14))
-        self.uptime_lbl.setToolTip("Tempo de Live")
+        self.uptime_lbl.setToolTip(get_translation("tooltip_uptime", lang))
         self.uptime_lbl.setStyleSheet("color: #b3b3b3; font-size: 12px; font-weight: bold; font-family: 'Consolas', monospace; background: transparent; padding-top: 0px; border: none; text-align: left;")
         self.uptime_lbl.setFocusPolicy(Qt.FocusPolicy.NoFocus)
 
         self.likes_lbl = QPushButton("0")
         self.likes_lbl.setIcon(QIcon(resource_path("assets/heart.svg")))
         self.likes_lbl.setIconSize(QSize(14, 14))
-        self.likes_lbl.setToolTip("Total de curtidas (Corações)")
+        self.likes_lbl.setToolTip(get_translation("tooltip_likes", lang))
         self.likes_lbl.setStyleSheet("color: #ff4d4d; font-size: 12px; font-weight: bold; background: transparent; padding-top: 0px; border: none; text-align: left;")
         self.likes_lbl.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         
@@ -1339,7 +1408,7 @@ class ChatWindow(QMainWindow):
         # Botão Alternar Visualização (Chat <-> Espectadores Online)
         self.view_switch_btn = QPushButton()
         self.view_switch_btn.setFixedSize(30, 30)
-        self.view_switch_btn.setToolTip("Ver Espectadores Online (TikTok)")
+        self.view_switch_btn.setToolTip(get_translation("tooltip_viewers_page", lang))
         self.view_switch_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         icon_users = QIcon(resource_path("assets/users.svg"))
         if not icon_users.isNull():
@@ -1355,7 +1424,7 @@ class ChatWindow(QMainWindow):
         # Botão Configurações
         self.settings_btn = QPushButton()
         self.settings_btn.setFixedSize(30,30)
-        self.settings_btn.setToolTip("Configurações (Ctrl+Alt+S)")
+        self.settings_btn.setToolTip(get_translation("tooltip_settings", lang))
         icon_settings = QIcon(resource_path("assets/settings.svg"))
         self.settings_btn.setIcon(icon_settings)
         self.settings_btn.setIconSize(QSize(18, 18))
@@ -1369,7 +1438,7 @@ class ChatWindow(QMainWindow):
         # Botão Sair Rápido (Portinha)
         self.exit_btn = QPushButton()
         self.exit_btn.setFixedSize(30, 30)
-        self.exit_btn.setToolTip("Sair do Aplicativo Completamente")
+        self.exit_btn.setToolTip(get_translation("tooltip_exit_quick", lang))
         icon_exit = QIcon(resource_path("assets/exit.svg"))
         self.exit_btn.setIcon(icon_exit)
         self.exit_btn.setIconSize(QSize(18, 18))
@@ -1384,7 +1453,7 @@ class ChatWindow(QMainWindow):
         self._pinned = True
         self.pin_btn = QPushButton()
         self.pin_btn.setFixedSize(30, 30)
-        self.pin_btn.setToolTip("Fixar janela por cima")
+        self.pin_btn.setToolTip(get_translation("tooltip_pin", lang))
         self.pin_btn.setCheckable(True)
         self.pin_btn.setChecked(True)
         icon_pin = QIcon(resource_path("assets/pin.svg"))
@@ -1402,6 +1471,7 @@ class ChatWindow(QMainWindow):
         # Botão Fechar
         self.close_btn = QPushButton("✕")
         self.close_btn.setFixedSize(30, 30)
+        self.close_btn.setToolTip(get_translation("tooltip_close", lang))
         self.close_btn.setStyleSheet("""
             QPushButton { 
                 background: transparent; color: white; border: none; font-size: 16px; 
@@ -1444,8 +1514,11 @@ class ChatWindow(QMainWindow):
         self.scroll_area.setWidgetResizable(True)
         self.scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self.scroll_area.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        self.scroll_area.viewport().setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        self.scroll_area.viewport().setStyleSheet("background: transparent;")
         self.scroll_area.setStyleSheet("""
-            QScrollArea { background: transparent; border: none; }
+            QScrollArea, QScrollArea > QWidget > QWidget { background: transparent; border: none; }
             QScrollBar:vertical {
                 border: none;
                 background: rgba(0, 0, 0, 50);
@@ -1462,6 +1535,7 @@ class ChatWindow(QMainWindow):
         """)
         
         self.chat_container = HeightAwareWidget()
+        self.chat_container.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.chat_container.setStyleSheet("background: transparent;")
         self.chat_layout = QVBoxLayout(self.chat_container)
         self.chat_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
@@ -1484,6 +1558,7 @@ class ChatWindow(QMainWindow):
         )
         self.viewers_page.back_requested.connect(lambda: self.switch_view(0))
         self.viewers_page.open_settings_requested.connect(self.settings_requested.emit)
+        self.viewers_page.sync_requested.connect(self.request_sync_viewers)
         self.stacked_widget.addWidget(self.viewers_page)
 
         self.layout.addWidget(self.stacked_widget)
@@ -1498,35 +1573,67 @@ class ChatWindow(QMainWindow):
         """)
 
     def apply_theme(self, settings_dict):
-        """ Aplica configurações visuais: Opacidade e Blur do Windows """
-        # Fundo normal = 200, Fundo Glass = 1 (quase zero) para ver o Blur
+        """ Aplica configurações visuais: Opacidade do Fundo, Opacidade de Texto e Blur do Windows """
         glass_enabled = settings_dict.get("glassmorphism", True)
         
-        # O WindowOpacity é o global da janela. Se usar Glass, 
-        # a janela PRECISA estar 1.0 (opaca) pro Blur renderizar cantanhos
-        
-        # Fundo do Container
-        bg_alpha = 10 if glass_enabled else 40
+        # Opacidade do fundo: padrão 75% (0.75) caso não configurado
+        bg_opacity = settings_dict.get("bg_opacity", settings_dict.get("opacity", 0.75))
+        try:
+            bg_opacity = max(0.0, min(1.0, float(bg_opacity)))
+        except (ValueError, TypeError):
+            bg_opacity = 0.75
+
+        # Opacidade específica dos textos/mensagens: padrão 100% (1.0)
+        text_opacity = settings_dict.get("text_opacity", 1.0)
+        try:
+            text_opacity = max(0.1, min(1.0, float(text_opacity)))
+        except (ValueError, TypeError):
+            text_opacity = 1.0
+
+        # Manter a janela no SO sempre em 1.0 (opaca) para que a transparência
+        # seja puramente interna via canal alfa (WA_TranslucentBackground), garantindo
+        # textos 100% nítidos e cantos arredondados perfeitos
+        self.setWindowOpacity(1.0)
+
+        # Fundo do Container (#central_widget) com transparência escura real (FUMÊ PRETO)
+        bg_alpha = int(bg_opacity * 255)
         self.central_widget.setStyleSheet(f"""
             #central_widget {{
-                background-color: rgba(15, 15, 15, {bg_alpha});
-                border: 1px solid rgba(255, 255, 255, 20);
+                background-color: rgba(0, 0, 0, {bg_alpha});
+                border: 1px solid rgba(255, 255, 255, 25);
                 border-radius: 10px;
             }}
         """)
-        
-        # Aplicar Blur
-        apply_blur(self.winId(), enable=glass_enabled)
 
-        # Input de Comandos (Oculto por padrão)
-        self.command_input = QLineEdit()
-        self.command_input.setPlaceholderText("Comando... (Esc para sair)")
-        self.command_input.setStyleSheet("""
-            QLineEdit { background: rgba(30, 30, 30, 40); color: white; border: 1px solid #555; padding: 5px; border-top-left-radius: 8px; border-top-right-radius: 8px; }
-        """)
-        self.command_input.hide()
-        self.command_input.returnPressed.connect(self.process_command)
-        self.layout.addWidget(self.command_input)
+        # Garantir que a chat_page e stacked_widget sejam 100% transparentes sem nenhum efeito cinza
+        if hasattr(self, 'chat_page'):
+            self.chat_page.setGraphicsEffect(None)
+            self.chat_page.setStyleSheet("background: transparent;")
+        if hasattr(self, 'stacked_widget'):
+            self.stacked_widget.setStyleSheet("background: transparent;")
+
+        # Aplicar opacidade de texto do chat de forma limpa via CSS (sem QGraphicsOpacityEffect)
+        text_alpha = int(text_opacity * 255)
+        self.current_text_opacity = text_opacity
+        if hasattr(self, 'chat_container'):
+            self.chat_container.setStyleSheet(f"background: transparent; QLabel {{ color: rgba(255, 255, 255, {text_alpha}); }}")
+
+        # Aplicar Blur / Mica / BlurBehind nativo
+        # Passa a cor de gradiente escuro com canal alfa correspondente
+        hex_alpha = f"{min(255, max(10, bg_alpha)):02X}"
+        apply_blur(self.winId(), enable=glass_enabled, hex_color=f"#000000{hex_alpha}")
+
+        # Input de Comandos (Oculto por padrão, criado uma única vez)
+        lang = self.settings_manager.settings.get("language", "pt-br") if hasattr(self, "settings_manager") else "pt-br"
+        if not hasattr(self, 'command_input'):
+            self.command_input = QLineEdit()
+            self.command_input.setPlaceholderText(get_translation("placeholder_command", lang))
+            self.command_input.setStyleSheet("""
+                QLineEdit { background: rgba(30, 30, 30, 180); color: white; border: 1px solid #555; padding: 5px; border-top-left-radius: 8px; border-top-right-radius: 8px; }
+            """)
+            self.command_input.hide()
+            self.command_input.returnPressed.connect(self.process_command)
+            self.layout.addWidget(self.command_input)
         
         # Ativar Redimensionamento e Mouse Tracking
         self.setMouseTracking(True)
@@ -1559,7 +1666,7 @@ class ChatWindow(QMainWindow):
             self.viewers_page.scroll_area.viewport().installEventFilter(self)
             self.viewers_page.list_container.installEventFilter(self)
         
-        self.add_message("Sistema", "🚀 Furious Multi Chat Pro Inicializado!", "system")
+        self.add_message(get_translation("system_label", lang), get_translation("system_initialized", lang), "system")
 
     def switch_view(self, target_index=None):
         """Alterna instantaneamente entre o Chat e os Espectadores Online sem conflito de renderização."""
@@ -1575,17 +1682,18 @@ class ChatWindow(QMainWindow):
 
         self.stacked_widget.setCurrentIndex(target_index)
 
+        lang = self.settings_manager.settings.get("language", "pt-br") if hasattr(self, "settings_manager") else "pt-br"
         # Atualiza botão do header
         if target_index == 1:
             if hasattr(self, 'viewers_page') and self.viewers_page:
                 self.viewers_page.refresh_state()
-            self.view_switch_btn.setToolTip("Voltar ao Chat")
+            self.view_switch_btn.setToolTip(get_translation("tooltip_chat_page", lang))
             self.view_switch_btn.setStyleSheet("""
                 QPushButton { background-color: rgba(0, 230, 230, 45); border: 1px solid #00e6e6; border-radius: 5px; }
                 QPushButton:hover { background-color: rgba(0, 230, 230, 75); }
             """)
         else:
-            self.view_switch_btn.setToolTip("Ver Espectadores Online (TikTok)")
+            self.view_switch_btn.setToolTip(get_translation("tooltip_viewers_page", lang))
             self.view_switch_btn.setStyleSheet("""
                 QPushButton { background: transparent; border: none; }
                 QPushButton:hover { background-color: rgba(0, 230, 230, 35); border-radius: 5px; }
@@ -1600,6 +1708,24 @@ class ChatWindow(QMainWindow):
         """Limpa a lista de espectadores online do TikTok na interface."""
         if hasattr(self, 'viewers_page') and self.viewers_page:
             self.viewers_page.clear_viewers()
+
+    def request_sync_viewers(self):
+        """Chama request_sync_now no handler TikTok ativo para forçar atualização em tempo real sem cache.
+        
+        Chamado pelo botão 'Sincronizar' da aba de espectadores online.
+        """
+        from chat_handlers.tiktok_handler import TikTokHandler
+        chat_manager = getattr(self, '_chat_manager', None)
+        if chat_manager:
+            for h in getattr(chat_manager, 'handlers', []):
+                if isinstance(h, TikTokHandler) and getattr(h, 'is_running', False):
+                    h.request_sync_now()
+                    return
+
+        print("[Espectadores] ⚠️ TikTok offline: não foi possível sincronizar.", flush=True)
+        # Nenhum handler ativo: exibe estado correto da aba
+        if hasattr(self, 'viewers_page') and self.viewers_page:
+            self.viewers_page.refresh_state()
         
     def process_command(self):
         cmd = self.command_input.text().strip()
@@ -1617,13 +1743,14 @@ class ChatWindow(QMainWindow):
             self.settings_manager.settings["always_on_top"] = self._pinned
             self.settings_manager.save_settings()
 
+        lang = self.settings_manager.settings.get("language", "pt-br") if hasattr(self, "settings_manager") else "pt-br"
         flags = self.windowFlags()
         if self._pinned:
             flags |= Qt.WindowType.WindowStaysOnTopHint
-            self.pin_btn.setToolTip("Janela TRAVADA (Não move) 📌")
+            self.pin_btn.setToolTip(get_translation("tooltip_pinned", lang))
         else:
             flags &= ~Qt.WindowType.WindowStaysOnTopHint
-            self.pin_btn.setToolTip("Janela DESTRAVADA")
+            self.pin_btn.setToolTip(get_translation("tooltip_unpinned", lang))
         
         # Garante que a janela continue sendo Frameless
         flags |= Qt.WindowType.FramelessWindowHint
@@ -1725,11 +1852,12 @@ class ChatWindow(QMainWindow):
             qfont = QFont(font_family, font_size)
             qfont.setBold(True)
             
+            text_alpha = int(getattr(self, 'current_text_opacity', 1.0) * 255)
             def create_text(content):
                 lbl = QLabel(content)
                 lbl.setFont(qfont)
                 lbl.setTextFormat(Qt.TextFormat.RichText)
-                lbl.setStyleSheet("color: white; background-color: transparent; margin: 0px; padding: 0px;")
+                lbl.setStyleSheet(f"color: rgba(255, 255, 255, {text_alpha}); background-color: transparent; margin: 0px; padding: 0px;")
                 lbl.setContentsMargins(0, 0, 0, 0)
                 return lbl
 
