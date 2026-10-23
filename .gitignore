@@ -104,6 +104,8 @@ python-3.12.10-64bits/
 
 # User-specific files
 settings.json
+settings.json.bak
+*.bak
 *.db
 *.log
 
