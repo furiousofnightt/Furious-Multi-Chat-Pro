@@ -7,8 +7,10 @@ main.py
 ├── ChatWindow (UI)           ← ui/main_window.py
 │   ├── QStackedWidget
 │   │   ├── Chat Page (Index 0)
-│   │   └── OnlineViewersListWidget (Index 1)
-│   │       └── ViewerCardWidget (Lista de Cards com avatar/rank/pts)
+│   │   ├── OnlineViewersListWidget (Index 1)
+│   │   │   └── ViewerCardWidget (Avatar/Rank/Pts)
+│   │   └── LiveGiftsListWidget (Index 2)  ← NOVO
+│   │       └── LiveGiftCardWidget (Avatar + Nome + Presente + Tempo)
 ├── ConfigWindow (Settings)   ← ui/config_window.py
 ├── ChatManager               ← core/chat_manager.py
 │   ├── TwitchHandler         ← chat_handlers/twitch_handler.py  (Thread IRC)
@@ -49,10 +51,12 @@ user_joined          = pyqtSignal(str, str)           # (username, platform)
 status_changed       = pyqtSignal(bool)               # (connected)
 stats_updated        = pyqtSignal(int, int, int, int) # (viewers, uptime, likes, total_views)
 viewers_list_updated = pyqtSignal(list)               # lista de dicionários de espectadores online
+gift_received        = pyqtSignal(dict)               # dados do presente recebido (TikTok apenas)
 ```
 
 > `total_views` é preenchido pelo TikTok via `RoomUserSeqEvent.total_user`.
 > `viewers_list_updated` emite a lista completa de usuários online (`rank`, `user_id`, `nickname`, `display_id`, `score`, `avatar_urls`, `total_online`).
+> `gift_received` é emitido apenas quando `event.streaking == False` (fim de rajada), com `gift_count` acumulado.
 
 ### ChatManager → ChatWindow
 ```python
@@ -65,6 +69,11 @@ platform_stats_updated = pyqtSignal(str, int, int, int, int) # (platform, viewer
 back_requested          = pyqtSignal()   # usuário clicou em ← Voltar
 open_settings_requested = pyqtSignal()   # usuário clicou em ⚙ Abrir Configurações (banners)
 sync_requested          = pyqtSignal()   # usuário clicou em ↺ Sincronizar
+```
+
+### LiveGiftsListWidget → ChatWindow
+```python
+back_requested = pyqtSignal()   # usuário clicou em Voltar
 ```
 
 ## Fluxo de Mensagem
@@ -95,6 +104,22 @@ _sync_online_audience_loop (Asyncio, a cada 4s)
     → GET /webcast/ranklist/online_audience/  (requisição fresca, sem cache)
     → viewers_list_updated.emit(resultado)  → mesmo fluxo acima
 ```
+
+## Fluxo de Presentes da Live (TikTok)
+
+```
+GiftEvent (WebSocket TikTokLive) — event.streaking == False
+    → TikTokHandler.on_gift()  [Asyncio]
+    → gift_received.emit(gift_data)  ← dict com user, gift_name, gift_count, diamond_count, timestamp...
+    → ChatWindow.add_gift(gift_data)  [Thread Principal Qt — AutoConnection]
+        → Badge de notificação no botão do header (se usuário não estiver na aba)
+    → LiveGiftsListWidget.add_gift(gift_data)
+        → Cria LiveGiftCardWidget (avatar + nome + "enviou X" + ícone + xN + tempo relativo)
+        → Instala eventFilter + mouseTracking no card e filhos (para resize da janela)
+        → Auto-scroll para o último presente (QTimer 50ms)
+```
+
+> **Limpeza de sessão:** `clear_gifts()` é chamado apenas em `start_all()` (nova sessão). Reconexões automáticas do WebSocket mantêm a lista intacta.
 
 ## Proteção de Autenticação e Rate-Limit (TikTok)
 

@@ -165,8 +165,8 @@ class TTSManager(QObject):
         init_session_log()
         self.parent_window = parent
         self.settings = getattr(parent, "settings_manager", None)
-        # Fila protegida contra raid (no máximo 10 na fila)
-        self.queue = deque(maxlen=10) # Armazena os caminhos dos arquivos .mp3
+        # Fila protegida contra raid (no máximo 50 na fila)
+        self.queue = deque(maxlen=50) # Armazena os caminhos dos arquivos .mp3
         self.downloading_count = 0
         self.is_muted = False
         self.current_playing_file = None
@@ -277,10 +277,10 @@ class TTSManager(QObject):
             log_tts("DEBUG", f"[PULO] Ignorada de '{clean_user}': Texto vazio apos limpeza/blacklist.")
             return
             
-        # Impede spam de downloads simultâneos e acúmulo infinito
+        # Impede spam de downloads simultâneos e acúmulo infinito (limite de 50 mensagens)
         total_pending = len(self.queue) + self.downloading_count
-        if total_pending >= 10:
-            log_tts("WARNING", f"[FILA CHEIA] Descartada: '{clean_user}: {clean_text[:30]}...' (Itens na fila: {len(self.queue)}, Baixando: {self.downloading_count}, Limite: 10)")
+        if total_pending >= 50:
+            log_tts("WARNING", f"[FILA CHEIA] Descartada: '{clean_user}: {clean_text[:30]}...' (Itens na fila: {len(self.queue)}, Baixando: {self.downloading_count}, Limite: 50)")
             return
             
         message_to_read = f"{clean_user} disse: {clean_text}"

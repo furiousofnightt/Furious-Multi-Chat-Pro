@@ -45,7 +45,7 @@ add_message(user, text, platform)
 ```
 
 ### Proteções Implementadas
-- **Fila anti-raid**: Máximo 10 mensagens em fila + 10 em download simultâneo.
+- **Fila anti-raid**: Máximo 50 mensagens em fila + downloads protegidos por semáforo.
 - **Mute instantâneo**: `Ctrl+M` limpa fila + para áudio atual.
 - **Try-Catch total**: Qualquer falha de rede ou API é silenciada — o chat visual nunca é afetado.
 - **Descarte on-mute**: Se o usuário mutar durante o download, o arquivo é descartado antes de entrar na fila.

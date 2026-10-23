@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 96 96" fill="none">
+  <defs>
+    <linearGradient id="emptyGiftGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FF5277"/>
+      <stop offset="50%" stop-color="#FF758C"/>
+      <stop offset="100%" stop-color="#FFAA00"/>
+    </linearGradient>
+    <radialGradient id="boxGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#FFAA00" stop-opacity="0.25"/>
+      <stop offset="100%" stop-color="#FF5277" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <!-- Glow background -->
+  <circle cx="48" cy="54" r="38" fill="url(#boxGlow)"/>
+  <!-- Sparkles -->
+  <path d="M48 14L50.5 21.5L58 24L50.5 26.5L48 34L45.5 26.5L38 24L45.5 21.5Z" fill="#FFD700" opacity="0.9"/>
+  <path d="M26 28L27.5 32.5L32 34L27.5 35.5L26 40L24.5 35.5L20 34L24.5 32.5Z" fill="#FF6584" opacity="0.75"/>
+  <path d="M70 30L71.5 34.5L76 36L71.5 37.5L70 42L68.5 37.5L64 36L68.5 34.5Z" fill="#FFCC00" opacity="0.8"/>
+  <circle cx="36" cy="20" r="1.5" fill="#FFE600" opacity="0.6"/>
+  <circle cx="62" cy="22" r="1.5" fill="#FF6584" opacity="0.6"/>
+  <!-- Box body -->
+  <rect x="24" y="48" width="48" height="34" rx="6" fill="#181722" stroke="url(#emptyGiftGrad)" stroke-width="2.5"/>
+  <!-- Lid slightly tilted (open look) -->
+  <rect x="20" y="38" width="56" height="10" rx="3" fill="#242030" stroke="url(#emptyGiftGrad)" stroke-width="2.5"/>
+  <!-- Vertical Ribbon -->
+  <rect x="44" y="38" width="8" height="44" fill="url(#emptyGiftGrad)" opacity="0.9"/>
+  <!-- Bow -->
+  <path d="M48 38C42 27 26 29 30 35C34 40 45 39 48 38Z" fill="url(#emptyGiftGrad)"/>
+  <path d="M48 38C54 27 70 29 66 35C62 40 51 39 48 38Z" fill="url(#emptyGiftGrad)"/>
+  <circle cx="48" cy="38" r="3" fill="#FFF275"/>
+</svg>

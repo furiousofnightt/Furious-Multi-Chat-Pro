@@ -64,6 +64,8 @@ def main():
     if hasattr(window, 'viewers_page') and window.viewers_page:
         window.viewers_page._settings_manager = settings
         window.viewers_page.refresh_state()
+    if hasattr(window, 'gifts_page') and window.gifts_page:
+        window.gifts_page._settings_manager = settings
     chat_manager = ChatManager(settings, window)
     # Injeta referência do chat_manager na janela para que request_sync_viewers funcione
     window._chat_manager = chat_manager

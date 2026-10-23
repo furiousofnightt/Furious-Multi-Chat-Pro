@@ -6,6 +6,7 @@ class BaseChatHandler(QObject):
     status_changed = pyqtSignal(bool)            # (connected)
     stats_updated = pyqtSignal(int, int, int, int)     # (viewers, uptime_seconds, likes, total_views)
     viewers_list_updated = pyqtSignal(list)             # list of viewer dicts
+    gift_received = pyqtSignal(dict)                    # {user, user_id, gift_name, gift_count, diamond_count, ...}
     
     def __init__(self, username):
         super().__init__()

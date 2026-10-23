@@ -65,6 +65,8 @@ class ChatManager(QObject):
     def start_all(self):
         self.window.clear_chat()
         self.window.reset_live_stats()
+        if hasattr(self.window, 'clear_gifts'):
+            self.window.clear_gifts()
         self.message_queue.clear()
         self.message_timer.stop()
         
@@ -115,6 +117,8 @@ class ChatManager(QObject):
             h.stats_updated.connect(lambda v, u, l, t: self.platform_stats_updated.emit("tiktok", v, u, l, t))
             if hasattr(self.window, "update_tiktok_viewers"):
                 h.viewers_list_updated.connect(self.window.update_tiktok_viewers)
+            if hasattr(self.window, "add_gift"):
+                h.gift_received.connect(self.window.add_gift)
             self.update_status("tiktok", False)
             h.start_with_loop(self.async_manager.loop)
             self.handlers.append(h)
@@ -261,7 +265,7 @@ class ChatManager(QObject):
                     h.stop()
                 except Exception as e:
                     print(f"⚠️ Erro ao parar handler {platform}: {e}")
-                for sig_name in ("message_received", "user_joined", "status_changed", "stats_updated", "viewers_list_updated"):
+                for sig_name in ("message_received", "user_joined", "status_changed", "stats_updated", "viewers_list_updated", "gift_received"):
                     sig = getattr(h, sig_name, None)
                     if sig:
                         try:
@@ -319,6 +323,8 @@ class ChatManager(QObject):
             h.stats_updated.connect(lambda v, u, l, t: self.platform_stats_updated.emit("tiktok", v, u, l, t))
             if hasattr(self.window, "update_tiktok_viewers"):
                 h.viewers_list_updated.connect(self.window.update_tiktok_viewers)
+            if hasattr(self.window, "add_gift"):
+                h.gift_received.connect(self.window.add_gift)
             h.start_with_loop(self.async_manager.loop)
             self.handlers.append(h)
         elif platform == "kick":

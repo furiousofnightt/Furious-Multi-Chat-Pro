@@ -1,6 +1,6 @@
-# Documentação do Furious Multi Chat Pro
+﻿# Documentação do Furious Multi Chat Pro
 
-> Última atualização: Agosto 2025
+> Última atualização: Outubro 2025
 
 ## 📚 Documentos
 
@@ -11,6 +11,7 @@
 | [ARQUITETURA.md](ARQUITETURA.md) | Devs — diagrama, threads, sinais, fluxos |
 | [GUIA-DESENVOLVIMENTO.md](GUIA-DESENVOLVIMENTO.md) | Devs — setup, build, como adicionar plataformas |
 | [ESPECTADORES-ONLINE.md](ESPECTADORES-ONLINE.md) | Devs / Usuários — aba de audiência online, controle de fonte e autenticação |
+| [ABA-PRESENTES-TIKTOK.md](ABA-PRESENTES-TIKTOK.md) | Devs / Usuários — aba de presentes da live, fluxo de eventos, cards e sessão |
 | [TIKTOK-LIMITACOES.md](TIKTOK-LIMITACOES.md) | Técnico — limitações do proxy EulerStream |
 
 ## 🔗 Raiz do projeto

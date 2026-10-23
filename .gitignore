@@ -115,3 +115,6 @@ Desktop.ini
 # IDEs
 .vscode/
 .idea/
+
+# Local references
+tts_reference_tikcontrol/

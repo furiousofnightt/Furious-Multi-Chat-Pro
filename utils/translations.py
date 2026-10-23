@@ -165,6 +165,18 @@ TRANSLATIONS = {
         "tiktok_login_required_hint": "Configurações → aba TikTok → Fazer Login",
         "btn_open_settings": "⚙  Abrir Configurações",
 
+        # Main Window - Live Gifts Page
+        "tooltip_gifts_page": "Ver Presentes Recebidos da Live",
+        "btn_clear_gifts": " Limpar",
+        "tooltip_clear_gifts": "Limpar lista de presentes recebidos",
+        "gifts_count_format": "{count} presentes recebidos",
+        "gifts_empty": "Nenhum presente recebido ainda nesta live.\nOs presentes enviados pelos espectadores aparecerão aqui em tempo real.",
+        "gift_sent_single_clean": "enviou {gift}",
+        "gift_time_now": "agora mesmo",
+        "gift_time_min": "há {m} min",
+        "gift_time_hour": "há {h}h",
+        "gift_time_day": "há {d}d",
+
         # Context Menu & Tray
         "menu_settings": "Configurações",
         "menu_clear_chat": "Limpar Chat",
@@ -346,6 +358,18 @@ TRANSLATIONS = {
         "tiktok_login_required_desc": "The online viewers tab displays\nall users present in your live stream.\n\nTo access it, log in with any\nTikTok account in Settings.",
         "tiktok_login_required_hint": "Settings → TikTok tab → Log In",
         "btn_open_settings": "⚙  Open Settings",
+
+        # Main Window - Live Gifts Page
+        "tooltip_gifts_page": "View Live Stream Received Gifts",
+        "btn_clear_gifts": " Clear",
+        "tooltip_clear_gifts": "Clear received gifts list",
+        "gifts_count_format": "{count} gifts received",
+        "gifts_empty": "No gifts received yet in this live stream.\nGifts sent by viewers will appear here in real time.",
+        "gift_sent_single_clean": "sent {gift}",
+        "gift_time_now": "just now",
+        "gift_time_min": "{m}m ago",
+        "gift_time_hour": "{h}h ago",
+        "gift_time_day": "{d}d ago",
 
         # Context Menu & Tray
         "menu_settings": "Settings",
