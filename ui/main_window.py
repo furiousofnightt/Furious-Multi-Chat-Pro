@@ -1050,16 +1050,26 @@ class LiveGiftCardWidget(QWidget):
         # 2. Informações do Doador e Presente (Nome + @handle + Descrição)
         self.info_box = QWidget()
         self.info_box.setStyleSheet("background: transparent; border: none;")
+        self.info_box.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        self.info_box.setMinimumWidth(50)
         info_layout = QVBoxLayout(self.info_box)
         info_layout.setContentsMargins(0, 0, 0, 0)
         info_layout.setSpacing(1)
 
         self.name_lbl = QLabel()
         self.name_lbl.setStyleSheet("background: transparent; border: none;")
+        self.name_lbl.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        self.name_lbl.setMinimumWidth(40)
+
         self.handle_lbl = QLabel()
         self.handle_lbl.setStyleSheet("background: transparent; border: none;")
+        self.handle_lbl.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        self.handle_lbl.setMinimumWidth(40)
+
         self.desc_lbl = QLabel()
         self.desc_lbl.setStyleSheet("background: transparent; border: none;")
+        self.desc_lbl.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        self.desc_lbl.setMinimumWidth(40)
 
         info_layout.addWidget(self.name_lbl)
         info_layout.addWidget(self.handle_lbl)
@@ -1069,6 +1079,7 @@ class LiveGiftCardWidget(QWidget):
         # 3. Box da direita: Ícone do presente + badge x10 + tempo relativo
         self.gift_box = QWidget()
         self.gift_box.setStyleSheet("background: transparent; border: none;")
+        self.gift_box.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Preferred)
         gift_layout = QVBoxLayout(self.gift_box)
         gift_layout.setContentsMargins(0, 0, 0, 0)
         gift_layout.setSpacing(2)
@@ -1112,12 +1123,19 @@ class LiveGiftCardWidget(QWidget):
         self.time_lbl.setStyleSheet("color: #888888; font-size: 10px; font-weight: 500; background: transparent; border: none;")
         gift_layout.addWidget(self.time_lbl)
 
-        layout.addWidget(self.gift_box)
+        layout.addWidget(self.gift_box, 0)
 
         self._render_data()
         self._load_avatar()
         self._load_gift_icon()
         self.update_relative_time()
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        new_w = event.size().width()
+        if new_w > 100 and getattr(self, '_last_rendered_w', 0) != new_w:
+            self._last_rendered_w = new_w
+            self._render_data()
 
     def _render_data(self):
         user = self.gift_info.get('user', 'Usuário')
@@ -1126,6 +1144,22 @@ class LiveGiftCardWidget(QWidget):
         diamond_count = self.gift_info.get('diamond_count', 0)
         gift_count = self.gift_info.get('gift_count', 1)
         total_diamonds = diamond_count * gift_count if diamond_count > 0 else 0
+
+        # Determina a largura disponível para a área de texto de forma responsiva
+        w = self.width()
+        if w < 150:
+            win = self.window()
+            if win and win.width() > 150:
+                w = win.width() - 35
+            else:
+                w = 360
+
+        gift_box_w = 75
+        if hasattr(self, 'gift_box') and self.gift_box:
+            sh = self.gift_box.sizeHint().width()
+            gift_box_w = max(60, sh if sh > 0 else 75)
+
+        avail_width = max(60, w - 70 - gift_box_w)
 
         # Badges do usuário (Moderador, Fã-Clube, Nível de Doador, etc.)
         prefix_badges = self.gift_info.get('prefix_badges', '')
@@ -1151,15 +1185,46 @@ class LiveGiftCardWidget(QWidget):
         p_badge_html = f"{prefix_badges} " if (prefix_badges and not prefix_badges.endswith(' ')) else (prefix_badges or '')
         s_badge_html = f" {suffix_badges}" if (suffix_badges and not suffix_badges.startswith(' ')) else (suffix_badges or '')
 
-        nick_html = f"{p_badge_html}<span style='color: #ffffff; font-weight: bold; font-size: {LiveGiftCardWidget._font_size}px;'>{html.escape(user)}</span>{s_badge_html}"
+        # Auto-escala suave da fonte do usuário até caber sem estourar o card
+        nick_sz = LiveGiftCardWidget._font_size
+        test_font = QFont(self.name_lbl.font())
+        test_font.setBold(True)
+        test_font.setPixelSize(nick_sz)
+        metrics = QFontMetrics(test_font)
+        while metrics.horizontalAdvance(user) > avail_width and nick_sz > 8:
+            nick_sz -= 1
+            test_font.setPixelSize(nick_sz)
+            metrics = QFontMetrics(test_font)
+
+        if metrics.horizontalAdvance(user) > avail_width:
+            user_display = metrics.elidedText(user, Qt.TextElideMode.ElideRight, avail_width)
+        else:
+            user_display = user
+
+        nick_html = f"{p_badge_html}<span style='color: #ffffff; font-weight: bold; font-size: {nick_sz}px;'>{html.escape(user_display)}</span>{s_badge_html}"
         self.name_lbl.setText(nick_html)
 
-        # @handle sempre na linha de baixo do nome
+        # @handle sempre na linha de baixo do nome com auto-escala e elide responsivo
         if not disp:
             disp = user
         if not disp.startswith('@'):
             disp = f"@{disp}"
-        self.handle_lbl.setText(f"<span style='color: #ffffff; font-size: 11px;'>{html.escape(disp)}</span>")
+
+        disp_sz = max(8, min(nick_sz - 1, 11))
+        test_font.setBold(False)
+        test_font.setPixelSize(disp_sz)
+        disp_metrics = QFontMetrics(test_font)
+        while disp_metrics.horizontalAdvance(disp) > avail_width and disp_sz > 7:
+            disp_sz -= 1
+            test_font.setPixelSize(disp_sz)
+            disp_metrics = QFontMetrics(test_font)
+
+        if disp_metrics.horizontalAdvance(disp) > avail_width:
+            disp_display = disp_metrics.elidedText(disp, Qt.TextElideMode.ElideRight, avail_width)
+        else:
+            disp_display = disp
+
+        self.handle_lbl.setText(f"<span style='color: #ffffff; font-size: {disp_sz}px;'>{html.escape(disp_display)}</span>")
 
         desc_parts = [f"<span style='color: #ffb400; font-size: 13px;'>enviou <b>{html.escape(gift_name)}</b></span>"]
         if total_diamonds > 0:
@@ -1382,6 +1447,12 @@ class LiveGiftsListWidget(QWidget):
 
         # Placeholder inicial (vazio)
         self.show_empty_placeholder()
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        for card in self._cards:
+            if hasattr(card, '_render_data'):
+                card._render_data()
 
     def _get_settings_manager(self):
         if self._settings_manager:

@@ -89,6 +89,8 @@ class TikTokHandler(BaseChatHandler):
         self._avatar_b64_cache = {}  # {user_id: "<img ...>"} — persiste entre reconexões
         self._online_viewers_map = {} # {user_id: viewer_dict}
         self._sync_task = None
+        self._cached_room_id = None
+        self._cached_username = None
 
     def _record_online_viewer(self, user, score=None, rank=None):
         """Registra/atualiza espectador online em tempo real."""
@@ -1190,6 +1192,12 @@ class TikTokHandler(BaseChatHandler):
                     self._connected_event.set()
                     self._reconnect_attempts = 0
                     self.status_changed.emit(True)
+                    if hasattr(self.client, 'room_id') and self.client.room_id:
+                        try:
+                            self._cached_room_id = int(self.client.room_id)
+                            self._cached_username = str(self.username).lower().strip('@')
+                        except Exception:
+                            pass
                     if not self._already_connected:
                         msg = get_translation("tiktok_connected", self.language, username=self.username)
                         self.message_received.emit(get_translation("tiktok_connect_attempt", self.language), msg, "system")
@@ -1423,12 +1431,32 @@ class TikTokHandler(BaseChatHandler):
                         self._already_connected = False
 
                 self._connected_event = asyncio.Event()
-                self.message_received.emit(
-                    get_translation("tiktok_connect_attempt", self.language),
-                    get_translation("tiktok_attempting", self.language, username=self.username),
-                    "system"
-                )
-                self._loop_task = await self.client.start()
+                if self._reconnect_attempts == 0:
+                    self.message_received.emit(
+                        get_translation("tiktok_connect_attempt", self.language),
+                        get_translation("tiktok_attempting", self.language, username=self.username),
+                        "system"
+                    )
+
+                # Retry rápido para absorver flutuações temporárias do WAF/JSON do TikTok sem poluir o chat
+                for attempt in range(3):
+                    try:
+                        start_kwargs = {}
+                        current_user_clean = str(self.username).lower().strip('@')
+                        if getattr(self, '_cached_room_id', None) and getattr(self, '_cached_username', None) == current_user_clean:
+                            start_kwargs['room_id'] = self._cached_room_id
+                        self._loop_task = await self.client.start(**start_kwargs)
+                        break
+                    except Exception as e_start:
+                        err_text = str(e_start).lower()
+                        if any(k in err_text for k in ["not capable", "never gone live", "not going live", "does not exist", "not found", "offline"]):
+                            raise e_start
+                        if attempt < 2 and self.is_running:
+                            print(f"[TikTok] Tentativa {attempt + 1}/3 de conexão falhou ({e_start}). Tentando novamente em 2s...", flush=True)
+                            self._cached_room_id = None
+                            await asyncio.sleep(2.0)
+                        else:
+                            raise e_start
                 try:
                     await asyncio.wait_for(self._connected_event.wait(), timeout=35.0)
                 except asyncio.TimeoutError:
@@ -1486,6 +1514,7 @@ class TikTokHandler(BaseChatHandler):
                       or "is over" in error_str
                       or "live has ended" in error_str):
                     # Canal existe mas está offline no momento
+                    self._cached_room_id = None
                     if self.is_running:
                         self.status_changed.emit(False)
                         msg = get_translation("tiktok_offline", self.language, username=self.username)
@@ -1493,8 +1522,15 @@ class TikTokHandler(BaseChatHandler):
                     self.is_running = False
                 elif self.is_running:
                     self.status_changed.emit(False)
-                    msg = get_translation("tiktok_error", self.language, error=str(e))
-                    self.message_received.emit(get_translation("tiktok_connect_attempt", self.language), msg, "system")
+                    if "expecting value" in error_str or "sigi_state" in error_str:
+                        if self._reconnect_attempts >= 5:
+                            msg = "Dificuldade ao estabelecer conexão com o TikTok. Verifique se a live está pública e ativa."
+                            self.message_received.emit(get_translation("tiktok_connect_attempt", self.language), msg, "system")
+                        else:
+                            print(f"[TikTok] Handshake temporário com TikTok falhou ({e}). Reconectando em 5s...", flush=True)
+                    else:
+                        msg = get_translation("tiktok_error", self.language, error=str(e))
+                        self.message_received.emit(get_translation("tiktok_connect_attempt", self.language), msg, "system")
             finally:
                 self.client = None
 
@@ -1516,6 +1552,8 @@ class TikTokHandler(BaseChatHandler):
     def stop(self):
         self.is_running = False
         self._already_connected = False
+        self._cached_room_id = None
+        self._cached_username = None
         if hasattr(self, '_online_viewers_map'):
             self._online_viewers_map.clear()
 

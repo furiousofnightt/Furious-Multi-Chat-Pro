@@ -1,0 +1,65 @@
+=================================================================
+[SISTEMA] FURIOUS MULTI CHAT PRO - NOVA SESSAO TTS INICIADA
+Data/Hora de Inicio: 2026-10-25 05:19:28
+Os logs desta sessao sao mantidos de forma limpa e rotativa.
+=================================================================
+
+[2026-10-25 05:19:28] [INFO] [MIXER] Mixer de audio (pygame) inicializado com sucesso.
+[2026-10-25 05:19:28] [INFO] [STATUS] TTSManager pronto. Motores: [Edge TTS: OK] [Google TTS: OK]
+[2026-10-25 05:19:47] [DEBUG] [MSG] Recebida de 'pablo.zwa' [TIKTOK]: 'Tem 30 boneco ai'
+[2026-10-25 05:19:47] [INFO] [ACEITA] 'pablo.zwa disse: Tem 30 boneco ai' [Plataforma: tiktok | Voz: pt-BR-FranciscaNeural]
+[2026-10-25 05:19:47] [INFO] [EDGE] Sintetizando via Microsoft Edge (Voz: pt-BR-FranciscaNeural)...
+[2026-10-25 05:19:48] [DEBUG] [MSG] Recebida de 'pablo.zwa' [TIKTOK]: 'Rapaz ate meio dia kk'
+[2026-10-25 05:19:48] [INFO] [ACEITA] 'pablo.zwa disse: Rapaz ate meio dia kk' [Plataforma: tiktok | Voz: pt-BR-FranciscaNeural]
+[2026-10-25 05:19:48] [INFO] [OK] [EDGE] Audio gerado com sucesso (22464 bytes em 1.31s) -> Enfileirado (Fila: 1)
+[2026-10-25 05:19:48] [INFO] [EDGE] Sintetizando via Microsoft Edge (Voz: pt-BR-FranciscaNeural)...
+[2026-10-25 05:19:48] [INFO] [PLAY] Audio (22464 bytes, Volume: 100%) | Restam na fila: 0
+[2026-10-25 05:19:49] [DEBUG] [MSG] Recebida de 'pablo.zwa' [TIKTOK]: '450 boneco'
+[2026-10-25 05:19:49] [INFO] [ACEITA] 'pablo.zwa disse: 450 boneco' [Plataforma: tiktok | Voz: pt-BR-FranciscaNeural]
+[2026-10-25 05:19:49] [INFO] [OK] [EDGE] Audio gerado com sucesso (25056 bytes em 1.19s) -> Enfileirado (Fila: 1)
+[2026-10-25 05:19:49] [INFO] [EDGE] Sintetizando via Microsoft Edge (Voz: pt-BR-FranciscaNeural)...
+[2026-10-25 05:19:50] [DEBUG] [MSG] Recebida de 'pablo.zwa' [TIKTOK]: 'Vlww ai tmjj boa live'
+[2026-10-25 05:19:50] [INFO] [ACEITA] 'pablo.zwa disse: Vlww ai tmjj boa live' [Plataforma: tiktok | Voz: pt-BR-FranciscaNeural]
+[2026-10-25 05:19:51] [DEBUG] [MSG] Recebida de 'pablo.zwa' [TIKTOK]: 'Deus abençoa'
+[2026-10-25 05:19:51] [INFO] [ACEITA] 'pablo.zwa disse: Deus abençoa' [Plataforma: tiktok | Voz: pt-BR-FranciscaNeural]
+[2026-10-25 05:19:51] [INFO] [OK] [EDGE] Audio gerado com sucesso (25488 bytes em 2.05s) -> Enfileirado (Fila: 2)
+[2026-10-25 05:19:51] [INFO] [EDGE] Sintetizando via Microsoft Edge (Voz: pt-BR-FranciscaNeural)...
+[2026-10-25 05:19:52] [DEBUG] [MSG] Recebida de 'pablo.zwa' [TIKTOK]: 'Kkk'
+[2026-10-25 05:19:52] [INFO] [ACEITA] 'pablo.zwa disse: Kkk' [Plataforma: tiktok | Voz: pt-BR-FranciscaNeural]
+[2026-10-25 05:19:52] [DEBUG] [STOP] Reproducao finalizada. Arquivo temporario removido.
+[2026-10-25 05:19:52] [INFO] [PLAY] Audio (25056 bytes, Volume: 100%) | Restam na fila: 1
+[2026-10-25 05:19:53] [DEBUG] [MSG] Recebida de 'الحمد لله' [TIKTOK]: 'suas lives sao otimas'
+[2026-10-25 05:19:53] [INFO] [ACEITA] 'الحمد لله disse: suas lives sao otimas' [Plataforma: tiktok | Voz: pt-BR-FranciscaNeural]
+[2026-10-25 05:19:53] [INFO] [OK] [EDGE] Audio gerado com sucesso (33696 bytes em 1.72s) -> Enfileirado (Fila: 2)
+[2026-10-25 05:19:53] [INFO] [EDGE] Sintetizando via Microsoft Edge (Voz: pt-BR-FranciscaNeural)...
+[2026-10-25 05:19:55] [INFO] [OK] [EDGE] Audio gerado com sucesso (20160 bytes em 1.60s) -> Enfileirado (Fila: 3)
+[2026-10-25 05:19:55] [INFO] [EDGE] Sintetizando via Microsoft Edge (Voz: pt-BR-FranciscaNeural)...
+[2026-10-25 05:19:56] [INFO] [OK] [EDGE] Audio gerado com sucesso (19152 bytes em 1.13s) -> Enfileirado (Fila: 4)
+[2026-10-25 05:19:56] [INFO] [EDGE] Sintetizando via Microsoft Edge (Voz: pt-BR-FranciscaNeural)...
+[2026-10-25 05:19:56] [DEBUG] [STOP] Reproducao finalizada. Arquivo temporario removido.
+[2026-10-25 05:19:56] [INFO] [PLAY] Audio (25488 bytes, Volume: 100%) | Restam na fila: 3
+[2026-10-25 05:19:57] [INFO] [OK] [EDGE] Audio gerado com sucesso (19584 bytes em 1.43s) -> Enfileirado (Fila: 4)
+[2026-10-25 05:20:01] [DEBUG] [STOP] Reproducao finalizada. Arquivo temporario removido.
+[2026-10-25 05:20:01] [INFO] [PLAY] Audio (33696 bytes, Volume: 100%) | Restam na fila: 3
+[2026-10-25 05:20:06] [DEBUG] [STOP] Reproducao finalizada. Arquivo temporario removido.
+[2026-10-25 05:20:06] [INFO] [PLAY] Audio (20160 bytes, Volume: 100%) | Restam na fila: 2
+[2026-10-25 05:20:07] [DEBUG] [MSG] Recebida de 'samu23' [TIKTOK]: 'colo ca o nome do mercado bagaceira mark'
+[2026-10-25 05:20:07] [INFO] [ACEITA] 'samu23 disse: colo ca o nome do mercado bagaceira mark' [Plataforma: tiktok | Voz: pt-BR-FranciscaNeural]
+[2026-10-25 05:20:07] [INFO] [EDGE] Sintetizando via Microsoft Edge (Voz: pt-BR-FranciscaNeural)...
+[2026-10-25 05:20:09] [INFO] [OK] [EDGE] Audio gerado com sucesso (31392 bytes em 2.33s) -> Enfileirado (Fila: 3)
+[2026-10-25 05:20:10] [DEBUG] [STOP] Reproducao finalizada. Arquivo temporario removido.
+[2026-10-25 05:20:10] [INFO] [PLAY] Audio (19152 bytes, Volume: 100%) | Restam na fila: 2
+[2026-10-25 05:20:13] [DEBUG] [STOP] Reproducao finalizada. Arquivo temporario removido.
+[2026-10-25 05:20:13] [INFO] [PLAY] Audio (19584 bytes, Volume: 100%) | Restam na fila: 1
+[2026-10-25 05:20:17] [DEBUG] [STOP] Reproducao finalizada. Arquivo temporario removido.
+[2026-10-25 05:20:17] [INFO] [PLAY] Audio (31392 bytes, Volume: 100%) | Restam na fila: 0
+[2026-10-25 05:20:22] [DEBUG] [STOP] Reproducao finalizada. Arquivo temporario removido.
+[2026-10-25 05:23:54] [DEBUG] [MSG] Recebida de 'samu23' [TIKTOK]: 'eu nao sei mas minha esposa disse que era muito bom'
+[2026-10-25 05:23:54] [INFO] [ACEITA] 'samu23 disse: eu nao sei mas minha esposa disse que era muito bom' [Plataforma: tiktok | Voz: pt-BR-FranciscaNeural]
+[2026-10-25 05:23:54] [INFO] [EDGE] Sintetizando via Microsoft Edge (Voz: pt-BR-FranciscaNeural)...
+[2026-10-25 05:23:55] [INFO] [OK] [EDGE] Audio gerado com sucesso (31680 bytes em 1.73s) -> Enfileirado (Fila: 1)
+[2026-10-25 05:23:56] [INFO] [PLAY] Audio (31680 bytes, Volume: 100%) | Restam na fila: 0
+[2026-10-25 05:24:01] [DEBUG] [STOP] Reproducao finalizada. Arquivo temporario removido.
+[2026-10-25 05:24:41] [DEBUG] [MSG] Recebida de 'samu23' [TIKTOK]: 'esse kitkat nao tem ca em portugal mano'
+[2026-10-25 05:24:41] [INFO] [ACEITA] 'samu23 disse: esse kitkat nao tem ca em portugal mano' [Plataforma: tiktok | Voz: pt-BR-FranciscaNeural]
+[2026-10-25 05:24:41] [INFO] [EDGE] Sintetizando via Microsoft Edge (Voz: pt-BR-FranciscaNeural)...
