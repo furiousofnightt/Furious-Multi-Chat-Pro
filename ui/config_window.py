@@ -3,7 +3,7 @@ from PyQt6.QtGui import QColor, QIcon, QFont, QKeySequence
 from PyQt6.QtCore import Qt, pyqtSignal, QSize, QEvent, QObject
 from utils.translations import get_translation, get_available_languages, get_language_display_name
 from utils.resource_path import resource_path
-from ui.main_window import FlowLayout, HeightAwareWidget
+from ui.widgets import FlowLayout, HeightAwareWidget
 import os
 
 # Helper para recursos

@@ -4,23 +4,28 @@
 
 ```
 main.py
-├── ChatWindow (UI)           ← ui/main_window.py
-│   ├── QStackedWidget
-│   │   ├── Chat Page (Index 0)
-│   │   ├── OnlineViewersListWidget (Index 1)
-│   │   │   └── ViewerCardWidget (Avatar/Rank/Pts)
-│   │   └── LiveGiftsListWidget (Index 2)  ← NOVO
-│   │       └── LiveGiftCardWidget (Avatar + Nome + Presente + Tempo)
-├── ConfigWindow (Settings)   ← ui/config_window.py
-├── ChatManager               ← core/chat_manager.py
-│   ├── TwitchHandler         ← chat_handlers/twitch_handler.py  (Thread IRC)
-│   ├── TikTokHandler         ← chat_handlers/tiktok_handler.py  (Asyncio)
-│   ├── KickHandler           ← chat_handlers/kick_handler.py    (Asyncio + Centrifugo)
-│   └── YoutubeHandler        ← chat_handlers/youtube_handler.py (Thread/Poller)
-├── BadgeManager              ← utils/badge_manager.py           (Renderizador Unificado de Badges)
-├── SettingsManager           ← core/settings_manager.py
-├── HotkeyManager             ← core/hotkey_manager.py
-└── TTSManager                ← utils/tts_engine.py
+├── ChatWindow (UI)                    ← ui/main_window.py  (~1060 linhas)
+│   ├── _setup_window_once()           # Setup único: event filters, mouse tracking, msg inicial
+│   ├── apply_theme()                  # Apenas visual; cached por _last_bg_alpha/_last_text_alpha
+│   └── QStackedWidget
+│       ├── ChatPageWidget (Index 0)   ← ui/widgets/chat_page.py
+│       │   ├── JoinNotificationBanner ← ui/widgets/notifications.py
+│       │   ├── QScrollArea + HeightAwareWidget  ← ui/widgets/custom_layouts.py
+│       │   └── FlowLayout (por mensagem)        ← ui/widgets/custom_layouts.py
+│       ├── OnlineViewersListWidget (Index 1)  ← ui/widgets/viewers_page.py
+│       │   └── ViewerCardWidget (Avatar/Rank/Pts)
+│       └── LiveGiftsListWidget (Index 2)      ← ui/widgets/gifts_page.py
+│           └── LiveGiftCardWidget (Avatar + Nome + Presente + Tempo)
+├── ConfigWindow (Settings)            ← ui/config_window.py
+├── ChatManager                        ← core/chat_manager.py
+│   ├── TwitchHandler  ← chat_handlers/twitch_handler.py  (Thread IRC)
+│   ├── TikTokHandler  ← chat_handlers/tiktok_handler.py  (Asyncio)
+│   ├── KickHandler    ← chat_handlers/kick_handler.py    (Asyncio + Centrifugo)
+│   └── YoutubeHandler ← chat_handlers/youtube_handler.py (Thread/Poller)
+├── BadgeManager       ← utils/badge_manager.py  (Renderizador Unificado de Badges)
+├── SettingsManager    ← core/settings_manager.py
+├── HotkeyManager      ← core/hotkey_manager.py
+└── TTSManager         ← utils/tts_engine.py
 ```
 
 ## Threading
@@ -81,8 +86,14 @@ back_requested = pyqtSignal()   # usuário clicou em Voltar
 ```
 Handler → message_received(user, text, platform)
     → ChatManager: blacklist + fila de delay
-    → ChatWindow.add_message (HTML render)
-    → TTSManager.read_message (se ativo)
+    → ChatWindow.add_message()
+        → ChatPageWidget.add_message()  (ui/widgets/chat_page.py)
+            → FlowLayout por mensagem (badge + nome + palavras/emotes)
+            → HeightAwareWidget para recalcular altura com quebra de linha
+            → Suporte CJK: chunks de 6 chars para wrap correto
+            → animate_message() — fade-in via QGraphicsOpacityEffect (removido após animação)
+            → Limite de 200 mensagens (LRU: remove o mais antigo)
+    → TTSManager.add_message (se ativo e plataforma não for 'system'/'tiktok_event')
 ```
 
 ## Fluxo de Audiência Online (TikTok)
@@ -133,6 +144,29 @@ GiftEvent (WebSocket TikTokLive) — event.streaking == False
 O `tiktok_session_id` é criptografado/descriptografado automaticamente via **Windows DPAPI** (`win32crypt`):
 - **Salvar**: texto puro → `CryptProtectData` → `"DPAPI:..."` no JSON
 - **Carregar**: detecta prefixo `DPAPI:` → `CryptUnprotectData` → texto em memória
+
+## apply_theme — Otimização de Performance
+
+O método `apply_theme()` em `ChatWindow` foi otimizado para eliminar o freeze de 3-5s
+que ocorria ao alterar a opacidade de fundo durante transmissões ao vivo.
+
+| Comportamento anterior | Comportamento atual |
+|---|---|
+| `setStyleSheet` sempre executado | Só executa se `bg_alpha` mudou (`_last_bg_alpha`) |
+| `installEventFilter` repetido em ~15 widgets | Rodava apenas 1 vez, em `_setup_window_once()` |
+| `apply_blur` (DWM) síncrono, bloqueava o repaint | Diferido com `QTimer.singleShot(0, ...)` |
+| `add_message("sistema inicializado")` em todo save | Rodava 1x no startup; nas demais via flag `_window_setup_done` |
+
+```python
+# Exemplo do cache de opacidade:
+last_bg = getattr(self, '_last_bg_alpha', None)
+if last_bg != bg_alpha:
+    self._last_bg_alpha = bg_alpha
+    self.central_widget.setStyleSheet(...)  # Só repinta se mudou
+
+# apply_blur diferido:
+QTimer.singleShot(0, lambda: apply_blur(self.winId(), ...))
+```
 
 ## Dependências Principais
 

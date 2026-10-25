@@ -12,14 +12,41 @@ py run.py
 ## Estrutura
 
 ```
-├── main.py                  # Ponto de entrada
-├── build.py                 # Compilação PyInstaller
-├── settings.json            # Configurações (gerado automaticamente)
-├── chat_handlers/           # TwitchHandler, TikTokHandler, KickHandler
-├── core/                    # ChatManager, SettingsManager, HotkeyManager
-├── ui/                      # ChatWindow, ConfigWindow
-├── utils/                   # translations, emoticons, tts_engine, resource_path
-└── assets/                  # Ícones SVG, fontes TTF, logos
+├── main.py                    # Ponto de entrada
+├── build.py                   # Compilação PyInstaller
+├── settings.json              # Configurações (gerado automaticamente)
+├── chat_handlers/             # TwitchHandler, TikTokHandler, KickHandler, YoutubeHandler
+├── core/                      # ChatManager, SettingsManager, HotkeyManager
+├── ui/
+│   ├── main_window.py           # ChatWindow (orquestrador principal)
+│   ├── config_window.py         # ConfigWindow (painel de configurações)
+│   └── widgets/                 # Pacote de widgets modulares (extraídos do monolito)
+│       ├── __init__.py          # Re-exporta todas as classes públicas
+│       ├── chat_page.py         # ChatPageWidget — feed de chat, scroll, mensagens
+│       ├── notifications.py     # JoinNotificationBanner — banner animado de entrada
+│       ├── custom_layouts.py    # FlowLayout + HeightAwareWidget
+│       ├── viewers_page.py      # ViewerCardWidget + OnlineViewersListWidget
+│       └── gifts_page.py        # LiveGiftCardWidget + LiveGiftsListWidget
+├── utils/                     # translations, tts_engine, resource_path, badge_manager...
+└── assets/                    # Ícones SVG, fontes TTF, logos
+```
+
+## Pacote `ui/widgets/`
+
+Criado para modularizar o `main_window.py` original (~2800 linhas). Cada arquivo tem responsabilidade única:
+
+| Módulo | Classes Exportadas | Responsabilidade |
+|--------|--------------------|------------------|
+| `chat_page.py` | `ChatPageWidget` | Feed principal de mensagens: scroll, FlowLayout por mensagem, suporte a emotes/GIFs/CJK, fade-in, limite de 200 msgs |
+| `notifications.py` | `JoinNotificationBanner` | Banner animado (fade-in/out) com fila de entrada de usuários, ajuste dinâmico de tamanho de fonte |
+| `custom_layouts.py` | `FlowLayout`, `HeightAwareWidget` | Layout que quebra linha automaticamente + widget que recalcula altura real com base na largura |
+| `viewers_page.py` | `ViewerCardWidget`, `OnlineViewersListWidget` | Aba de espectadores online TikTok: cards com avatar circular, rank, score, botões de sincronizar/voltar |
+| `gifts_page.py` | `LiveGiftCardWidget`, `LiveGiftsListWidget` | Aba de presentes da live: cards com avatar, nome, descrição do presente, contagem e tempo relativo |
+
+Importe sempre pelo pacote:
+
+```python
+from ui.widgets import ChatPageWidget, OnlineViewersListWidget, LiveGiftsListWidget
 ```
 
 ## Sinais PyQt6
