@@ -87,6 +87,8 @@ class TikTokHandler(BaseChatHandler):
         self._rate_limited = False
         self._connected_event = None
         self._avatar_b64_cache = {}  # {user_id: "<img ...>"} — persiste entre reconexões
+        self._gift_icon_cache = {}   # {gift_name: url} — persiste entre reconexões
+        self._gift_b64_cache = {}    # {gift_name: "<img>"} — persiste entre reconexões
         self._online_viewers_map = {} # {user_id: viewer_dict}
         self._sync_task = None
         self._cached_room_id = None
@@ -284,6 +286,7 @@ class TikTokHandler(BaseChatHandler):
     def start_with_loop(self, loop):
         self.loop = loop
         self.is_running = True
+        self._rate_limited = False
         self._reconnect_attempts = 0
         async def run_tiktok_once():
             try:
@@ -313,7 +316,7 @@ class TikTokHandler(BaseChatHandler):
                     print(f"[TikTok] Usando sessionid salvo ({len(session_id)} chars) para autenticacao.")
                     kwargs['web_kwargs'] = {'httpx_kwargs': {'cookies': {'sessionid': session_id}}}
                 else:
-                    print("[TikTok] Nenhum sessionid encontrado. Lives +18 nao terao uptime real.")
+                    print("[TikTok] Conectando em modo visitante padrão (sem login).")
 
                 self.client = TikTokLiveClient(**kwargs)
 
@@ -322,57 +325,91 @@ class TikTokHandler(BaseChatHandler):
                 self._total_likes = 0
                 self._total_views = 0
                 self._room_info_fetched = False
-                self._gift_icon_cache = {}
-                self._gift_b64_cache = {}
+                if not hasattr(self, '_gift_icon_cache'):
+                    self._gift_icon_cache = {}
+                if not hasattr(self, '_gift_b64_cache'):
+                    self._gift_b64_cache = {}
 
                 async def _build_gift_cache():
-                    """Busca a lista de presentes do TikTok e monta o cache de URLs de ícones."""
-
+                    """Busca a lista de presentes do TikTok e monta o cache de URLs de ícones por ID e Nome."""
                     try:
                         data = await self.client.web.fetch_gift_list()
                         gifts = data.get('gifts', data) if isinstance(data, dict) else (data or [])
                         if isinstance(gifts, list):
                             for g in gifts:
-                                name = (g.get('name') or '').lower()
+                                name = (g.get('name') or '').lower().strip()
+                                gid = str(g.get('id') or '').strip()
                                 img = g.get('image') or {}
                                 icon = g.get('icon') or {}
                                 
-                                # A V6 usa chaves diferentes (ex: url_list, m_urls)
-                                img_urls = img.get('url_list') or img.get('url_urls') or img.get('m_urls') or [None]
-                                icon_urls = icon.get('url_list') or icon.get('url_urls') or icon.get('m_urls') or [None]
+                                img_urls = img.get('url_list') or img.get('url_urls') or img.get('m_urls') or []
+                                icon_urls = icon.get('url_list') or icon.get('url_urls') or icon.get('m_urls') or []
                                 
                                 url = (
-                                    img_urls[0]
+                                    (img_urls[0] if img_urls else None)
                                     or g.get('icon_url')
                                     or g.get('cover_url')
-                                    or icon_urls[0]
+                                    or (icon_urls[0] if icon_urls else None)
                                 )
-                                if name and url:
-                                    self._gift_icon_cache[name] = url
-                        print(f"✅ Gift icon cache: {len(self._gift_icon_cache)} presentes")
+                                if url:
+                                    if gid:
+                                        self._gift_icon_cache[gid] = url
+                                    if name:
+                                        self._gift_icon_cache[name] = url
+                        print(f"✅ Gift icon cache: {len(self._gift_icon_cache)} presentes mapeados (por ID e Nome)", flush=True)
                     except Exception as e:
-                        print(f"⚠️ Gift cache falhou: {e}")
+                        print(f"⚠️ Gift cache falhou: {e}", flush=True)
 
-                async def _get_gift_icon_html(gift_name: str) -> str:
-                    """Retorna a tag <img> Base64 para o ícone do presente. Usa cache para não baixar repetido."""
-                    key = gift_name.lower()
-                    if key in self._gift_b64_cache:
+                async def _get_gift_icon_html(gift_name: str, gift_obj=None) -> str:
+                    """Retorna a tag <img> Base64 para o ícone real do presente. Busca por ID numérico e por Nome."""
+                    gid = str(getattr(gift_obj, 'id', '') or '').strip() if gift_obj else ''
+                    key = (gift_name or "").lower().strip()
+
+                    # 1. Verifica no cache Base64 em memória (por ID ou por Nome)
+                    if gid and gid in self._gift_b64_cache and self._gift_b64_cache[gid]:
+                        return self._gift_b64_cache[gid]
+                    if key and key in self._gift_b64_cache and self._gift_b64_cache[key]:
                         return self._gift_b64_cache[key]
-                    icon_url = self._gift_icon_cache.get(key, '')
-                    if not icon_url:
-                        return ''
-                    try:
-                        headers = {"User-Agent": "Mozilla/5.0", "Referer": "https://www.tiktok.com/"}
-                        async with httpx.AsyncClient(timeout=5.0, headers=headers) as hc:
-                            resp = await hc.get(icon_url)
-                            if resp.status_code == 200 and resp.content:
-                                b64 = base64.b64encode(resp.content).decode()
-                                ct = resp.headers.get("content-type", "image/png")
-                                html = f"<img src='data:{ct};base64,{b64}'>"
-                                self._gift_b64_cache[key] = html
-                                return html
-                    except Exception:
-                        pass
+
+                    # 2. Busca a URL do presente no catálogo oficial (por ID ou por Nome)
+                    icon_url = ''
+                    if gid:
+                        icon_url = self._gift_icon_cache.get(gid, '')
+                    if not icon_url and key:
+                        icon_url = self._gift_icon_cache.get(key, '')
+
+                    # 3. Se não achou pelo catálogo, extrai direto do objeto do evento (TikTokLive proto)
+                    if not icon_url and gift_obj:
+                        icon_url = (
+                            getattr(gift_obj, 'icon_url', None)
+                            or getattr(gift_obj, 'image_url', None)
+                            or getattr(gift_obj, 'cover', None)
+                        )
+                        if not icon_url:
+                            for sub in [getattr(gift_obj, 'image', None), getattr(gift_obj, 'icon', None)]:
+                                if sub:
+                                    u_list = getattr(sub, 'url_list', getattr(sub, 'm_urls', getattr(sub, 'urls', None)))
+                                    if u_list and len(u_list) > 0:
+                                        icon_url = u_list[0]
+                                        break
+
+                    if icon_url:
+                        if gid: self._gift_icon_cache[gid] = icon_url
+                        if key: self._gift_icon_cache[key] = icon_url
+                        try:
+                            headers = {"User-Agent": "Mozilla/5.0", "Referer": "https://www.tiktok.com/"}
+                            async with httpx.AsyncClient(timeout=3.0, headers=headers) as hc:
+                                resp = await hc.get(icon_url)
+                                if resp.status_code == 200 and resp.content:
+                                    b64 = base64.b64encode(resp.content).decode()
+                                    ct = resp.headers.get("content-type", "image/png").split(";")[0].strip()
+                                    html = f"<img src='data:{ct};base64,{b64}'>"
+                                    if gid: self._gift_b64_cache[gid] = html
+                                    if key: self._gift_b64_cache[key] = html
+                                    return html
+                        except Exception as e:
+                            print(f"⚠️ Erro ao baixar ícone de presente ({gift_name} / id={gid}): {e}", flush=True)
+
                     return ''
 
                 async def _get_avatar_b64(user_obj) -> str:
@@ -681,28 +718,19 @@ class TikTokHandler(BaseChatHandler):
                         except:
                             pass
 
-                        # Avatar: cache hit = instant; novo usuário = aguarda até 1s (asyncio.shield
-                        # não bloqueia outros eventos, apenas dá tempo ao CDN que é rápido)
+                        # Avatar: cache hit = instantâneo (0ms); novo usuário = não bloqueia o chat, baixa em background!
                         avatar_html = ''
                         user_id = ''
                         try:
                             if user_obj:
                                 user_id = str(getattr(user_obj, 'id', '') or '')
-                                cached = self._avatar_b64_cache.get(user_id, 'NOT_FOUND') if user_id else ''
-                                if cached == 'NOT_FOUND':
-                                    # Primeiro contato com este usuário: inicia download e aguarda até 1s
-                                    task = asyncio.create_task(_get_avatar_b64(user_obj))
-                                    try:
-                                        await asyncio.wait_for(asyncio.shield(task), timeout=1.0)
-                                    except asyncio.TimeoutError:
-                                        pass  # CDN demorou; task continua, próxima msg terá avatar
-                                    avatar_html = self._avatar_b64_cache.get(user_id) or ''
-                                elif cached is None:
-                                    # Download já em andamento (outra msg deste usuário disparou antes)
-                                    avatar_html = ''
-                                else:
-                                    # Cache hit: '', '<img...>' etc
-                                    avatar_html = cached
+                                if user_id:
+                                    cached = self._avatar_b64_cache.get(user_id)
+                                    if cached:
+                                        avatar_html = cached
+                                    elif user_id not in self._avatar_b64_cache:
+                                        self._avatar_b64_cache[user_id] = ''
+                                        asyncio.create_task(_get_avatar_b64(user_obj))
                         except Exception:
                             pass
 
@@ -932,10 +960,16 @@ class TikTokHandler(BaseChatHandler):
                         gift_name  = getattr(event.gift, 'name', None) or "Presente"
                         gift_count = getattr(event, 'repeat_count', 1) or getattr(event.gift, 'repeat_count', 1) or 1
 
-                        # Avatar do usuário
+                        # Avatar do usuário (sem travar se não estiver em cache)
                         avatar_html = ''
+                        user_id = ''
                         if user_obj:
-                            avatar_html = await _get_avatar_b64(user_obj)
+                            user_id = str(getattr(user_obj, 'id', '') or '')
+                            if user_id:
+                                avatar_html = self._avatar_b64_cache.get(user_id, '')
+                                if not avatar_html and user_id not in self._avatar_b64_cache:
+                                    self._avatar_b64_cache[user_id] = ''
+                                    asyncio.create_task(_get_avatar_b64(user_obj))
 
                         # Badges
                         prefix_badges = ''
@@ -948,40 +982,8 @@ class TikTokHandler(BaseChatHandler):
 
                         author_display = f"{avatar_html}{prefix_badges}{author}{suffix_badges}" if (avatar_html or prefix_badges or suffix_badges) else author
 
-                        # Busca o ícone no cache construído pelo fetch_gift_list
-                        icon_html = await _get_gift_icon_html(gift_name)
-
-                        # Fallback: tenta obter a URL diretamente do objeto gift caso o cache falhe
-                        if not icon_html:
-                            try:
-                                gift_obj = event.gift
-                                icon_url = (
-                                    getattr(gift_obj, 'icon_url', None)
-                                    or getattr(gift_obj, 'image_url', None)
-                                    or getattr(gift_obj, 'cover', None)
-                                )
-                                if not icon_url:
-                                    img_obj = getattr(gift_obj, 'image', None) or getattr(gift_obj, 'icon', None)
-                                    if img_obj:
-                                        url_list = getattr(img_obj, 'url_list', getattr(img_obj, 'm_urls', getattr(img_obj, 'urls', None)))
-                                        if url_list and len(url_list) > 0:
-                                            icon_url = url_list[0]
-                                
-                                if icon_url:
-                                    gift_headers = {
-                                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-                                        "Referer": "https://www.tiktok.com/"
-                                    }
-                                    async with httpx.AsyncClient(timeout=5.0, headers=gift_headers) as hc:
-                                        resp = await hc.get(icon_url)
-                                        if resp.status_code == 200 and resp.content:
-                                            b64 = base64.b64encode(resp.content).decode()
-                                            ct = resp.headers.get("content-type", "image/png")
-                                            icon_html = f"<img src='data:{ct};base64,{b64}'>"
-                                            self._gift_icon_cache[gift_name.lower()] = icon_url
-                                            self._gift_b64_cache[gift_name.lower()] = icon_html
-                            except Exception as e:
-                                pass
+                        # Busca o ícone no cache ou baixa rápido (com fallback garantido para nunca falhar)
+                        icon_html = await _get_gift_icon_html(gift_name, getattr(event, 'gift', None))
 
                         msg = get_translation("gift_sent_multiple", self.language, gift_name, icon_html, gift_count)
                         self.message_received.emit(author_display, msg, "tiktok_event")
@@ -1449,6 +1451,18 @@ class TikTokHandler(BaseChatHandler):
                         break
                     except Exception as e_start:
                         err_text = str(e_start).lower()
+                        # Se a sessão for inválida/expirada ou canal inexistente/offline, não faz retentativa imediata para não queimar rate limit
+                        if any(k in err_text for k in [
+                            "sessionid invalid",
+                            "no tiktok session is currently available",
+                            "session is currently available",
+                            "session invalid",
+                            "session expired",
+                            "sessionid expired",
+                            "invalid session",
+                            "sessionid_invalid"
+                        ]):
+                            raise e_start
                         if any(k in err_text for k in ["not capable", "never gone live", "not going live", "does not exist", "not found", "offline"]):
                             raise e_start
                         if attempt < 2 and self.is_running:
@@ -1489,13 +1503,62 @@ class TikTokHandler(BaseChatHandler):
                         f.write(f"--- {time.strftime('%Y-%m-%d %H:%M:%S')} ---\n")
                         f.write(traceback.format_exc())
                         f.write("\n")
-                if "429" in error_str or "rate_limit" in error_str or "too many connections" in error_str:
+
+                # 1. Tratamento automático e robusto para Session ID expirado, revogado ou inválido
+                is_session_expired = any(k in error_str for k in [
+                    "sessionid invalid",
+                    "no tiktok session is currently available",
+                    "session is currently available",
+                    "session invalid",
+                    "session expired",
+                    "sessionid expired",
+                    "invalid session",
+                    "sessionid_invalid"
+                ])
+                if is_session_expired:
+                    print("[TikTok] ⚠️ Detectada sessão do TikTok inválida/revogada. Excluindo Session ID e reconectando em modo visitante...", flush=True)
+                    # 1.1 Exclui automaticamente o session ID revogado/expirado das configurações
+                    try:
+                        from core.settings_manager import SettingsManager
+                        sm = SettingsManager()
+                        sm.settings["tiktok_session_id"] = ""
+                        sm.save_settings()
+                        print("[TikTok] ✅ Session ID removido com sucesso de settings.json.", flush=True)
+                    except Exception as ex_clean:
+                        print(f"[TikTok] Erro ao remover session_id: {ex_clean}", flush=True)
+
+                    # 1.2 Avisa o usuário de forma clara e visível no chat
+                    if self.is_running:
+                        msg_aviso = get_translation("tiktok_session_expired", self.language)
+                        self.message_received.emit(
+                            get_translation("tiktok_connect_attempt", self.language),
+                            msg_aviso,
+                            "system"
+                        )
+
+                    # 1.3 Limpa caches e retorna sinal para reconectar imediatamente sem sessão
+                    self._cached_room_id = None
+                    self._reconnect_attempts = 0
+                    if self.is_running:
+                        return "reconnect_without_session"
+
+                elif "rate_limit_account_minute" in error_str:
+                    self._rate_limited = True
+                    if self.is_running:
+                        self.status_changed.emit(False)
+                        msg = get_translation("tiktok_rate_limited_minute", self.language, username=self.username)
+                        self.message_received.emit(get_translation("tiktok_connect_attempt", self.language), msg, "system")
+                    self.is_running = False
+
+                elif "429" in error_str or "rate_limit" in error_str or "too many connections" in error_str:
                     self._rate_limited = True
                     if self.is_running:
                         self.status_changed.emit(False)
                         msg = get_translation("tiktok_rate_limited", self.language, username=self.username, error=str(e)[:100])
                         self.message_received.emit(get_translation("tiktok_connect_attempt", self.language), msg, "system")
                     self.is_running = False
+
+
                 elif ("not capable" in error_str
                       or "never gone live" in error_str
                       or "not going live" in error_str
@@ -1532,11 +1595,21 @@ class TikTokHandler(BaseChatHandler):
                         msg = get_translation("tiktok_error", self.language, error=str(e))
                         self.message_received.emit(get_translation("tiktok_connect_attempt", self.language), msg, "system")
             finally:
+                if self.client:
+                    try:
+                        await self.client.disconnect()
+                    except Exception:
+                        pass
                 self.client = None
 
         async def run_tiktok():
             while self.is_running:
-                await run_tiktok_once()
+                res = await run_tiktok_once()
+                if res == "reconnect_without_session":
+                    if self.is_running:
+                        print("[TikTok] Conectando imediatamente em modo visitante (sem autenticação)...", flush=True)
+                        await asyncio.sleep(0.5)
+                        continue
                 if self.is_running and not self._rate_limited:
                     self._reconnect_attempts += 1
                     if self._reconnect_attempts > 5:

@@ -146,13 +146,22 @@ class TextCleaner:
             for word in blacklist:
                 if word:
                     boundary = r'(?<![A-Za-zÀ-ÿ0-9_])' + re.escape(word) + r'(?![A-Za-zÀ-ÿ0-9_])'
-                    clean_text = re.sub(boundary, '', clean_text, flags=re.IGNORECASE)
+                    clean_text = re.sub(boundary, ' ', clean_text, flags=re.IGNORECASE)
 
-        # Remove emojis e caracteres fora do alfabeto/pontuação comum
-        clean_text = re.sub(r"[^\w\s.,!?@#'*-]", '', clean_text)
+        # Remove sequências de 2 ou mais asteriscos (palavras censuradas pelo filtro de chat)
+        # Mantém um único asterisco intacto, pois no Brasil é usado para indicar correção de palavras (ex: casa*)
+        clean_text = re.sub(r'\*{2,}', ' ', clean_text)
+
+        # Remove emojis e caracteres fora do alfabeto/pontuação comum (mantém '*' para correções)
+        clean_text = re.sub(r"[^\w\s.,!?@'*-]", '', clean_text)
         # Reduz letras repetidas excessivas (ex: kkkkkkkk -> kkk)
         clean_text = re.sub(r'(.)\1{4,}', r'\1\1\1', clean_text)
-        clean_text = clean_text.strip()
+        # Corrige espaços antes de pontuações após remoção de palavras censuradas (ex: "olá , tudo" -> "olá, tudo")
+        clean_text = re.sub(r'\s+([.,!?])', r'\1', clean_text)
+        # Remove pontuação solta no início da frase se uma palavra censurada estava no começo
+        clean_text = re.sub(r'^[.,!?:;\s]+', '', clean_text)
+        # Normaliza espaços múltiplos
+        clean_text = re.sub(r'\s+', ' ', clean_text).strip()
         # Limite máximo de segurança de 500 caracteres (suporta o tamanho máximo da Twitch/Kick)
         if len(clean_text) > 500:
             clean_text = clean_text[:500] + "..."
@@ -252,7 +261,7 @@ class TTSManager(QObject):
         settings = getattr(self.parent_window, "settings_manager", None)
         blacklist = settings.settings.get("blacklist", []) if settings else []
         clean_text = TextCleaner.clean(text, blacklist=blacklist)
-        clean_user = TextCleaner.clean(user, blacklist=blacklist)
+        clean_user = TextCleaner.clean(user, blacklist=blacklist) or "Usuário"
 
         # Loga nome e texto limpos (sem base64 ou tags HTML de badges)
         log_tts("DEBUG", f"[MSG] Recebida de '{clean_user}' [{platform.upper()}]: '{clean_text}'")

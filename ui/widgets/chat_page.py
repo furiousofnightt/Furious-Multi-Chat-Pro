@@ -113,7 +113,15 @@ class ChatPageWidget(QWidget):
         while self.chat_layout.count() > 0:
             item = self.chat_layout.takeAt(0)
             if item and item.widget():
-                item.widget().deleteLater()
+                w = item.widget()
+                if hasattr(w, '_animations'):
+                    for m in w._animations:
+                        try:
+                            m.stop()
+                        except Exception:
+                            pass
+                    w._animations.clear()
+                w.deleteLater()
         if hasattr(self, 'join_banner'):
             self.join_banner.queue.clear()
             self.join_banner.fade_out()
@@ -233,26 +241,35 @@ class ChatPageWidget(QWidget):
                         emote_lbl.setStyleSheet("background-color: transparent;")
 
                         if src.startswith("data:image"):
-                            # Suporte a ícones Base64 (presentes do TikTok)
+                            # Suporte a ícones Base64 (presentes do TikTok e avatares)
+                            loaded = False
                             try:
                                 _, b64_data = src.split(",", 1)
                                 from PyQt6.QtCore import QByteArray
                                 img_data = QByteArray.fromBase64(b64_data.encode())
                                 pixmap = QPixmap()
-                                pixmap.loadFromData(img_data)
-                                if not pixmap.isNull():
+                                if pixmap.loadFromData(img_data) and not pixmap.isNull():
                                     emote_lbl.setPixmap(pixmap)
+                                    loaded = True
+                                else:
+                                    # Fallback para QImage caso QPixmap falhe com WebP/AVIF
+                                    from PyQt6.QtGui import QImage
+                                    qimg = QImage.fromData(img_data)
+                                    if not qimg.isNull():
+                                        emote_lbl.setPixmap(QPixmap.fromImage(qimg))
+                                        loaded = True
                             except Exception:
                                 pass
                         elif local_path.endswith(".gif") or local_path.endswith(".webp"):
-
                             movie = QMovie(local_path)
                             movie.setScaledSize(QSize(24, 24))
                             emote_lbl.setMovie(movie)
                             movie.start()
                             msg_widget._animations.append(movie)
                         else:
-                            emote_lbl.setPixmap(QPixmap(local_path))
+                            pix = QPixmap(local_path)
+                            if not pix.isNull():
+                                emote_lbl.setPixmap(pix)
 
                         msg_layout.addWidget(emote_lbl)
                 else:
@@ -289,30 +306,29 @@ class ChatPageWidget(QWidget):
             # Adiciona a mensagem nativamente
             self.chat_layout.addWidget(msg_widget)
 
-            # Força o limitador de largura para a nova mensagem quebrar a linha (WordWrap)
+            # Ajusta largura apenas se houve mudança real de tamanho (evita relayout pesado a cada mensagem)
             vp_width = self.scroll_area.viewport().width()
             if vp_width > 0:
-                self.chat_container.setFixedWidth(vp_width)
-                # Margem total real:
-                #   chat_layout: 10px (esq) + 25px (dir) = 35px
-                #   msg_layout:   6px (esq) +  6px (dir) = 12px
-                #   Total: ~47px + 5px de segurança extra = 52px
-                # Usar offset correto evita subestimar o número de linhas
-                # e o +20 de buffer vertical garante que nenhuma linha seja cortada
+                if self.chat_container.width() != vp_width:
+                    self.chat_container.setFixedWidth(vp_width)
                 h = msg_layout.heightForWidth(vp_width - 52)
                 if h > 0:
                     msg_widget.setMaximumHeight(h + 20)
 
-            # Garante que o resize considere quebra de linha nova
-            self.chat_layout.invalidate()
-
-            # Limite de 200 mensagens
-            if self.chat_layout.count() > 200:
+            # Limite de 100 mensagens para manter o chat 100% fluido e com bom histórico
+            while self.chat_layout.count() > 100:
                 item = self.chat_layout.takeAt(0)
                 if item and item.widget():
-                    item.widget().deleteLater()
-
-            # O ScrollArea resizable cuida da atualização de tamanho da tela automaticamente
+                    w = item.widget()
+                    # Para animações ativas de GIFs para liberar timers da CPU
+                    if hasattr(w, '_animations'):
+                        for m in w._animations:
+                            try:
+                                m.stop()
+                            except Exception:
+                                pass
+                        w._animations.clear()
+                    w.deleteLater()
 
             # Rola para o fundo automaticamente
             QTimer.singleShot(30, self._scroll_to_bottom)
@@ -330,20 +346,17 @@ class ChatPageWidget(QWidget):
                 pass
 
     def animate_message(self, widget):
-        # Efeito de Opacidade
+        # Efeito de Opacidade suave e rápido (200ms) sem travar a renderização
         opacity_effect = QGraphicsOpacityEffect(widget)
         widget.setGraphicsEffect(opacity_effect)
 
-        # Animação de Opacidade (Fade-in)
         fade_anim = QPropertyAnimation(opacity_effect, b"opacity", widget)
-        fade_anim.setDuration(500)
-        fade_anim.setStartValue(0)
-        fade_anim.setEndValue(1)
-        fade_anim.setEasingCurve(QEasingCurve.Type.OutCubic)
-        # Remover o efeito ao finalizar (Resolve bugs de transparência/ghosting)
+        fade_anim.setDuration(200)
+        fade_anim.setStartValue(0.1)
+        fade_anim.setEndValue(1.0)
+        fade_anim.setEasingCurve(QEasingCurve.Type.OutQuad)
+        # Remover o efeito ao finalizar (libera memória gráfica e volta ao desenho nativo)
         fade_anim.finished.connect(lambda: widget.setGraphicsEffect(None))
-        fade_anim.start()
+        fade_anim.start(QPropertyAnimation.DeletionPolicy.DeleteWhenStopped)
 
-        # Guardar referência para evitar GC prematuro
         widget._fade_anim = fade_anim
-        widget.animations = [fade_anim]

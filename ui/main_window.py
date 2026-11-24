@@ -366,7 +366,8 @@ class ChatWindow(QMainWindow):
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Window)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         
-        self.resize(400, 600)
+        self.resize(480, 600)
+        self.setMinimumSize(250, 200)
         
         # Central Widget
         self.central_widget = QWidget()

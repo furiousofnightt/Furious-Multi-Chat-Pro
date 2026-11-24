@@ -47,6 +47,8 @@ TRANSLATIONS = {
         "tiktok_offline": "📴 TikTok: Canal '@{username}' está offline no momento. Parando reconexão.",
         "tiktok_not_found": "❌ TikTok: Usuário '@{username}' não encontrado ou nunca foi ao vivo. Verifique o nome digitado.",
         "tiktok_rate_limited": "⚠️ RATE LIMIT ATIVADO para {username}!\nLimite de requisições foi excedido.\nAguarde ~16-24 horas para tentar novamente.\nErro: {error}",
+        "tiktok_rate_limited_minute": "⚠️ Limite temporário de requisições no servidor para @{username}. Aguarde cerca de 1 a 2 minutos e tente conectar novamente.",
+        "tiktok_session_expired": "ℹ️ TikTok: Sessão opcional expirada. Conectando normalmente em modo visitante (o chat funciona 100% — login é opcional para horas completas e aba de espectadores).",
         
         
         # System Messages - Kick
@@ -242,6 +244,8 @@ TRANSLATIONS = {
         "tiktok_offline": "📴 TikTok: Channel '@{username}' is currently offline. Stopping reconnection.",
         "tiktok_not_found": "❌ TikTok: User '@{username}' was not found or has never gone live. Please check the username.",
         "tiktok_rate_limited": "⚠️ RATE LIMIT ACTIVATED for {username}!\nRequest limit exceeded.\nWait ~16-24 hours to try again.\nError: {error}",
+        "tiktok_rate_limited_minute": "⚠️ Temporary server request limit for @{username}. Please wait about 1 to 2 minutes and try connecting again.",
+        "tiktok_session_expired": "ℹ️ TikTok: Optional session expired. Connecting normally in guest mode (chat works 100% — login is optional for full uptime and viewers tab).",
         
         
         # System Messages - Kick
