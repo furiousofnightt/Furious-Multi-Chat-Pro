@@ -47,7 +47,6 @@ def build_exe():
         '--hidden-import=PyQt6.QtGui',
         '--hidden-import=PyQt6.QtWidgets',
         '--hidden-import=PyQt6.QtSvg',
-        '--hidden-import=keyboard',
         '--hidden-import=twitchio',
         '--hidden-import=kickpython',
         '--hidden-import=edge_tts',

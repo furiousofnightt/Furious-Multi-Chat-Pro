@@ -3,7 +3,7 @@ from PyInstaller.utils.hooks import collect_all
 
 datas = [('ui', 'ui'), ('core', 'core'), ('chat_handlers', 'chat_handlers'), ('utils', 'utils'), ('assets', 'assets')]
 binaries = []
-hiddenimports = ['httpx', 'websockets', 'certifi', 'betterproto', 'pyee', 'typing_extensions', 'TikTokLive', 'PyQt6.QtCore', 'PyQt6.QtGui', 'PyQt6.QtWidgets', 'PyQt6.QtSvg', 'keyboard', 'twitchio', 'kickpython', 'edge_tts', 'pygame', 'curl_cffi', 'PyQt6.QtWebEngineWidgets', 'PyQt6.QtWebEngineCore', 'win32crypt', 'gtts', 'gtts.tts', 'gtts.lang', 'requests', 'urllib3', 'charset_normalizer', 'click']
+hiddenimports = ['httpx', 'websockets', 'certifi', 'betterproto', 'pyee', 'typing_extensions', 'TikTokLive', 'PyQt6.QtCore', 'PyQt6.QtGui', 'PyQt6.QtWidgets', 'PyQt6.QtSvg', 'twitchio', 'kickpython', 'edge_tts', 'pygame', 'curl_cffi', 'PyQt6.QtWebEngineWidgets', 'PyQt6.QtWebEngineCore', 'win32crypt', 'gtts', 'gtts.tts', 'gtts.lang', 'requests', 'urllib3', 'charset_normalizer', 'click']
 tmp_ret = collect_all('PyQt6.QtWebEngineWidgets')
 datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
 tmp_ret = collect_all('PyQt6.QtWebEngineCore')

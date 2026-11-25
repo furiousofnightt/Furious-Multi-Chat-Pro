@@ -415,18 +415,22 @@ class TikTokHandler(BaseChatHandler):
                 async def _get_avatar_b64(user_obj) -> str:
                     """Retorna tag <img> com avatar Base64 do usuário. Cache por user_id."""
                     try:
-                        user_id = str(getattr(user_obj, 'id', '') or '')
+                        user_id = str((getattr(user_obj, 'id', None) if not isinstance(user_obj, dict) else user_obj.get('id')) or '')
                         if not user_id:
                             return ''
                         # Sentinel: None = download em andamento, '' = falhou, '<img>' = ok
                         cached = self._avatar_b64_cache.get(user_id, 'NOT_FOUND')
-                        if cached != 'NOT_FOUND':
-                            return cached or ''
+                        if cached != 'NOT_FOUND' and cached is not None and cached != '':
+                            return cached
+                        if cached is None:
+                            # Outra tarefa já está baixando
+                            return ''
                         # Marca como em andamento antes de qualquer await
                         self._avatar_b64_cache[user_id] = None
+
                         avatar_url = None
                         for av_field in ['avatar_thumb', 'avatar_medium', 'avatar_large', 'avatar_168x168', 'avatar_300x300', 'avatar_jpg']:
-                            av_obj = getattr(user_obj, av_field, None)
+                            av_obj = getattr(user_obj, av_field, None) if not isinstance(user_obj, dict) else user_obj.get(av_field)
                             if av_obj:
                                 if isinstance(av_obj, dict):
                                     u_list = av_obj.get('url_list') or av_obj.get('urls_list') or []
@@ -448,6 +452,14 @@ class TikTokHandler(BaseChatHandler):
                                     if u_list and len(u_list) > 0:
                                         avatar_url = u_list[0]
                                         break
+
+                        # Fallback: busca no mapa de espectadores sincronizados que já coletou a URL
+                        if not avatar_url and hasattr(self, '_user_avatar_url_map'):
+                            avatar_url = self._user_avatar_url_map.get(user_id)
+                        if not avatar_url and hasattr(self, '_online_viewers_map'):
+                            ov = self._online_viewers_map.get(user_id, {})
+                            avatar_url = ov.get('avatar_url') or (ov.get('avatar_urls', [None])[0] if ov.get('avatar_urls') else None)
+
                         if not avatar_url:
                             self._avatar_b64_cache[user_id] = ''
                             return ''
@@ -464,20 +476,20 @@ class TikTokHandler(BaseChatHandler):
                                     tag = f"<img src='data:{ct};base64,{raw_b64}' width='22' height='22' style='vertical-align:middle;margin-right:4px;'>"
                                 
                                 self._avatar_b64_cache[user_id] = tag
-                                # Limpar cache se ficar grande demais (~500 avatares)
-                                if len(self._avatar_b64_cache) > 500:
+                                # Limpar cache se ficar grande demais (~1000 avatares)
+                                if len(self._avatar_b64_cache) > 1000:
                                     keys = list(self._avatar_b64_cache.keys())
-                                    for k in keys[:250]:
+                                    for k in keys[:500]:
                                         del self._avatar_b64_cache[k]
                                 return tag
                         # Download falhou
                         self._avatar_b64_cache[user_id] = ''
-                    except Exception:
-                        # Garante que o sentinel None nunca fica preso em caso de erro
+                    except Exception as e:
+                        print(f"⚠️ Erro ao baixar avatar ({getattr(user_obj, 'id', user_obj)}): {e}", flush=True)
                         try:
-                            user_id2 = str(getattr(user_obj, 'id', '') or '')
-                            if user_id2 and self._avatar_b64_cache.get(user_id2) is None:
-                                self._avatar_b64_cache[user_id2] = ''
+                            uid = str((getattr(user_obj, 'id', None) if not isinstance(user_obj, dict) else user_obj.get('id')) or '')
+                            if uid and self._avatar_b64_cache.get(uid) is None:
+                                self._avatar_b64_cache[uid] = ''
                         except Exception:
                             pass
                     return ''
@@ -718,19 +730,21 @@ class TikTokHandler(BaseChatHandler):
                         except:
                             pass
 
-                        # Avatar: cache hit = instantâneo (0ms); novo usuário = não bloqueia o chat, baixa em background!
+                        # Avatar: instantâneo se já em cache; novo usuário baixa em background para a próxima mensagem
                         avatar_html = ''
                         user_id = ''
                         try:
                             if user_obj:
                                 user_id = str(getattr(user_obj, 'id', '') or '')
                                 if user_id:
-                                    cached = self._avatar_b64_cache.get(user_id)
-                                    if cached:
+                                    cached = self._avatar_b64_cache.get(user_id, 'NOT_FOUND')
+                                    if cached and cached != 'NOT_FOUND':
                                         avatar_html = cached
-                                    elif user_id not in self._avatar_b64_cache:
-                                        self._avatar_b64_cache[user_id] = ''
+                                    elif cached == 'NOT_FOUND':
                                         asyncio.create_task(_get_avatar_b64(user_obj))
+                                        avatar_html = ''
+                                    elif cached is None:
+                                        avatar_html = ''
                         except Exception:
                             pass
 
@@ -960,16 +974,20 @@ class TikTokHandler(BaseChatHandler):
                         gift_name  = getattr(event.gift, 'name', None) or "Presente"
                         gift_count = getattr(event, 'repeat_count', 1) or getattr(event.gift, 'repeat_count', 1) or 1
 
-                        # Avatar do usuário (sem travar se não estiver em cache)
+                        # Avatar do usuário
                         avatar_html = ''
                         user_id = ''
                         if user_obj:
                             user_id = str(getattr(user_obj, 'id', '') or '')
                             if user_id:
-                                avatar_html = self._avatar_b64_cache.get(user_id, '')
-                                if not avatar_html and user_id not in self._avatar_b64_cache:
-                                    self._avatar_b64_cache[user_id] = ''
+                                cached = self._avatar_b64_cache.get(user_id, 'NOT_FOUND')
+                                if cached and cached != 'NOT_FOUND':
+                                    avatar_html = cached
+                                elif cached == 'NOT_FOUND':
                                     asyncio.create_task(_get_avatar_b64(user_obj))
+                                    avatar_html = ''
+                                elif cached is None:
+                                    avatar_html = ''
 
                         # Badges
                         prefix_badges = ''
