@@ -6,7 +6,6 @@ TikTokLive
 kickpython
 PyInstaller
 aiohttp
-keyboard
 httpx
 edge-tts>=7.3.1
 pygame-ce

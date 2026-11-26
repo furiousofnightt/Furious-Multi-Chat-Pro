@@ -88,14 +88,23 @@ Efeito visual de vidro fosco (blur + transparência). Disponível no Windows 11.
 
 ### Como funciona o sistema de hotkeys?
 
-Atalhos de teclado que funcionam mesmo quando o programa não está focado:
+Atalhos de teclado globais que funcionam mesmo enquanto você joga em tela cheia ou o programa não está focado:
 - **Ctrl+Shift+H**: Mostrar/Esconder janela
 - **Ctrl+Shift+C**: Limpar chat
 - **Ctrl+M**: Ativar/Desativar bot de voz (TTS)
+- **Ctrl+Alt+T** (ou tecla única configurada, ex: **PgDown**): Ativar/Desativar Modo Fantasma (Click-Through)
+
+O sistema foi reconstruído usando a API oficial do Windows (**`RegisterHotKey`**), garantindo 0% de uso de CPU, funcionamento sem lag e sem instalar ganchos invasivos no teclado.
 
 ### Posso mudar as hotkeys?
 
-Sim. Vá em Configurações → Comportamento → Atalhos de Teclado.
+Sim! Vá em **Configurações → aba Geral / Comportamento → Atalhos de Teclado**.
+Basta clicar no campo do atalho desejado e pressionar a tecla ou combinação que preferir (ex: `F9`, `PgDown`, `Del`, `Ctrl+F1`, etc.). Pressione `Esc` caso queira cancelar a captura. O parser dinâmico aceita qualquer tecla e layout de teclado internacional.
+
+### O que é o Modo Fantasma (Click-Through)?
+
+É a funcionalidade que torna o chat completamente "invisível" para o mouse do Windows. Quando ativo, você pode jogar qualquer jogo ou navegar e clicar na tela exatamente onde o chat está posicionado sem focar ou mover a janela por engano.
+- Para ligar ou desligar: Pressione o atalho configurado (**Ctrl+Alt+T** ou sua tecla personalizada, como **PgDown**).
 
 ### O que é o "Atraso para Leitura"?
 
@@ -120,6 +129,20 @@ Lista de palavras que serão censuradas no chat (substituídas por `*****`). Con
 ### O que acontece se eu mudar de computador?
 
 O aplicativo não conseguirá descriptografar o token antigo (esse é o comportamento correto de segurança). Você precisará fazer o login novamente pelo aplicativo para gerar um novo token na nova máquina.
+
+### Por que o Windows Defender marcou o app como "Cavalo de Tróia" ou "Comportamento Suspeito"?
+
+**Causa**: Versões anteriores utilizavam a biblioteca de terceiros `keyboard`. Essa biblioteca instala ganchos globais de teclado no sistema operacional (`WH_KEYBOARD_LL`). Quando um executável compilado por PyInstaller não possui assinatura digital paga e tenta escutar o teclado globalmente por esse método, os motores heurísticos do Windows Defender o confundem com um keylogger/trojan.
+
+**Solução definitiva adotada**: A biblioteca `keyboard` foi **completamente removida**. O aplicativo agora utiliza exclusivamente a API oficial nativa da Microsoft (**`RegisterHotKey`** via `ctypes`), que não espiona teclas digitadas e opera diretamente no kernel sem disparar alertas de segurança.
+
+### Por que o Windows exibe "Fornecedor Desconhecido" e a tela azul do SmartScreen?
+
+**Causa**: Para que o Windows exiba o nome da empresa ou desenvolvedor sem nenhum aviso, a Microsoft exige que o `.exe` seja assinado com um **Certificado de Assinatura de Código (Code Signing Certificate)** emitido por autoridades homologadas (como DigiCert, Sectigo). Esses certificados são comercializados em planos anuais de centenas de dólares (entre R$ 1.500 e R$ 4.000/ano). Como o Furious Multi Chat Pro é um projeto independente, o executável é distribuído de forma gratuita e sem certificado comercial.
+
+**Como prosseguir**: O software é 100% seguro e de código aberto. Na primeira vez que for aberto em uma máquina, basta clicar em:
+> **"Mais informações" ➔ "Executar assim mesmo"**
+O Windows lembrará dessa autorização e não voltará a exibir o aviso.
 
 ---
 

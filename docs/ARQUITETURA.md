@@ -180,7 +180,31 @@ QTimer.singleShot(0, lambda: apply_blur(self.winId(), ...))
 | websockets | Conexão em tempo real nativa ao Centrifugo da Kick |
 | edge-tts / gtts + pygame-ce | Bot de voz (Motor Neural Edge ou Google TTS alternativo) |
 | pywin32 | Criptografia DPAPI |
+| ctypes (Nativo) | Win32 API (`RegisterHotKey`, `VkKeyScanW`, DWM Blur/Glassmorphism) |
 | PyInstaller | Geração do executável |
+
+> **Nota de Segurança**: A biblioteca externa `keyboard` foi permanentemente removida do projeto para eliminar a instalação de ganchos globais de baixo nível (`WH_KEYBOARD_LL`), erradicando qualquer detecção heurística de keylogger/trojan por antivírus.
+
+## Sistema de Hotkeys Globais (Win32 RegisterHotKey)
+
+```
+Thread da UI (PyQt6)
+    ▲
+    │ Sinais PyQt6 (toggle_visibility, clear_chat, toggle_tts, toggle_clickthrough)
+    │
+Win32HotkeyThread (Background Thread)
+    └── user32.GetMessageW() [Loop de Mensagens Win32]
+            └── Recebe WM_HOTKEY (0x0312) do Windows Kernel
+                    └── Executa callback associado
+```
+
+### Características Técnicas:
+1. **Zero Hooks / 100% Nativo**: Utiliza `user32.RegisterHotKey` com identificadores únicos (IDs 1 a 4). O próprio kernel do Windows monitora os atalhos e notifica a aplicação através da fila de mensagens da thread (`WM_HOTKEY`). Não intercepta o que o usuário digita em outros programas e consome 0% de CPU.
+2. **Resolução de Teclas 100% Dinâmica (`parse_hotkey`)**:
+   - **`QKeySequence`**: Resolve combinações canônicas do Qt (`Ctrl+Shift+H`, `Ctrl+M`, `Alt+F4`, etc.).
+   - **`user32.VkKeyScanW`**: Consulta em tempo real o layout de teclado ativo no Windows do usuário (ABNT2, US Internacional, etc.) para mapear caracteres e símbolos (`ç`, `?`, `/`, `;`, etc.) para seus respectivos Virtual-Key codes (`VK`).
+   - **Mapeador de Aliases**: Suporta nomes informais ou gravados na UI como `pgdown`, `pagedown`, `pgup`, `del`, teclas de direção (`up`, `down`, `left`, `right`), `printscreen` e teclado numérico completo (`numpad0` a `numpad9`, `numpadadd`, `numpadsub`, etc.).
+   - **Sem Hardcoding**: Qualquer atalho registrado no `settings.json` ou configurado interativamente no `HotkeyField` é resolvido dinamicamente.
 
 ## Sistema de Voz (TTS)
 

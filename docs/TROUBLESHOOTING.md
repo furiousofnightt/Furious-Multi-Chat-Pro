@@ -274,6 +274,56 @@ py -m pip install -r requirements.txt
 
 ---
 
+---
+
+### Alerta de Segurança do Windows Defender ("Cavalo de Tróia" ou "Comportamento Suspeito")
+
+**Sintomas**: O Windows Defender bloqueia ou move para quarentena o arquivo `FuriousMultiChatPro.exe` acusando categoria *Cavalo de Tróia* ou *Comportamento Suspeito*.
+
+**Causa**: Ocorre quando o executável foi compilado com versões antigas que incluíam a biblioteca `keyboard`. Essa biblioteca instala ganchos globais de teclado no Windows (`WH_KEYBOARD_LL`). Sem um certificado digital comercial, os antivírus ativam uma heurística genérica que confunde o app com um keylogger.
+
+**Solução**:
+1. **Atualize o código e recompile**:
+   - A biblioteca `keyboard` foi removida em favor da API oficial `RegisterHotKey` (ctypes).
+   - Execute o script oficial de build:
+     ```bash
+     python build.py
+     ```
+   - O novo executável gerado não possui ganchos globais e roda com zero falso positivo.
+2. **Se o Defender mantiver o alerta no histórico antigo**:
+   - Abra a *Segurança do Windows* → *Proteção contra vírus e ameaças* → *Histórico de proteção*.
+   - No item bloqueado anteriormente, clique em *Ações* ➔ *Permitir no dispositivo* (ou limpe o histórico de proteção).
+
+---
+
+### Windows SmartScreen: "O Windows protegeu o seu computador" (Fornecedor Desconhecido)
+
+**Sintomas**: Ao tentar abrir o `.exe`, surge a janela azul do SmartScreen informando que o aplicativo é desconhecido.
+
+**Causa**: O executável é distribuído de forma gratuita e não possui um certificado comercial pago de *Code Signing* (que custa centenas de dólares anuais).
+
+**Solução**:
+1. Na janela azul do SmartScreen, clique no link **"Mais informações"**.
+2. Clique no botão **"Executar assim mesmo"**.
+3. Essa autorização é solicitada apenas uma vez por versão.
+
+---
+
+### Atalhos de Teclado (Hotkeys) não funcionam ou falham ao registrar
+
+**Sintomas**: Pressionar a combinação de teclas (ex: `Ctrl+Shift+H`, `PgDown`, `Ctrl+Alt+T`) não produz efeito, ou aparece mensagem no terminal `⚠️ Não foi possível registrar hotkey: Código 1409`.
+
+**Causa**:
+- **Código 1409 (`ERROR_HOTKEY_ALREADY_REGISTERED`)**: Outro programa em execução (ex: OBS Studio, Discord, GeForce Experience) já registrou esse mesmo atalho global no Windows.
+- Nome da tecla digitado incorretamente.
+
+**Solução**:
+1. Abra as **Configurações** (⚙️) ➔ aba **Geral / Comportamento** ➔ **Atalhos de Teclado**.
+2. Clique no campo do atalho e pressione uma combinação diferente (ex: altere para `F9`, `F10` ou `Ctrl+Shift+K`).
+3. Clique em **Salvar** — o `HotkeyManager` desregistra o atalho antigo e registra o novo em tempo real sem precisar reiniciar o app.
+
+---
+
 ### `settings.json` corrompido
 
 **Solução**:

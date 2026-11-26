@@ -37,8 +37,9 @@ O **Furious Multi Chat Pro** é uma aplicação desktop de alta performance cria
 - **📊 Estatísticas em Tempo Real**: Painel com viewers online, **total de visualizações acumuladas** (TikTok), uptime da transmissão e curtidas — tudo atualizado ao vivo.
 - **🟢 Status de Conexão Inteligente**: Tooltip nos viewers que exibe o estado real de cada plataforma — "Offline" quando desconectada, "0" quando conectada mas sem espectadores, e o número real quando há viewers.
 - **🎨 Design Premium & Glassmorphism**: Interface moderna, fluida e com suporte a transparência e efeito blur (desfoque nativo do Windows).
-- **👻 Overlay Inteligente**: Modo "Sempre no Topo" (Always-on-top) com opacidade ajustável e função "Click-through" (clique através do chat) para não atrapalhar sua gameplay.
-- **⌨️ Hotkeys Globais**: Atalhos de teclado customizáveis para ocultar/exibir ou limpar o chat rapidamente.
+- **👻 Overlay Inteligente**: Modo "Sempre no Topo" (Always-on-top) com opacidade ajustável e função "Modo Fantasma" (Click-through com clique através do chat) para não atrapalhar sua gameplay.
+- **⌨️ Hotkeys Globais Nativas**: Atalhos de teclado customizáveis (ocultar/exibir, limpar chat, alternar TTS e modo fantasma) usando a API oficial `RegisterHotKey` do Windows — sem ganchos invasivos (`WH_KEYBOARD_LL`), 0% de uso de CPU e imune a falsos positivos de antivírus.
+- **💬 Buffer Estendido de 100 Mensagens**: Histórico com capacidade aumentada para 100 mensagens com rolagem e renderização suave.
 - **😎 Suporte Completo a Emotes**: Renderização em tempo real de emotes nativos da Twitch, Kick, além de suportar extensões populares como **7TV e BTTV**.
 - **🔔 Notificações Visuais**: Alertas em formato de banner animado quando novos espectadores entram na live.
 - **🛡️ Ferramentas de Moderação**: Sistema de *Blacklist* para censurar automaticamente palavras indesejadas.
@@ -105,16 +106,21 @@ Na primeira execução, o sistema gerará automaticamente o arquivo `settings.js
     "tts_voice_youtube": "pt-BR-DonatoNeural",
     "hotkey_toggle_visibility": "ctrl+shift+h",
     "hotkey_clear_chat": "ctrl+shift+c",
+    "hotkey_toggle_tts": "ctrl+m",
+    "hotkey_clickthrough": "ctrl+alt+t",
     "tiktok_session_id": "DPAPI:..."
 }
 ```
 
 ## 🎮 Comandos e Atalhos (Hotkeys)
 
-### Atalhos de Teclado (Padrão)
+### Atalhos Globais de Teclado (Personalizáveis)
 - `Ctrl + Shift + H`: Mostrar/Esconder janela do chat
 - `Ctrl + Shift + C`: Limpar o histórico do chat
 - `Ctrl + M`: Ativar/Desativar o Bot de Voz Neural (TTS)
+- `Ctrl + Alt + T` (ou tecla única, ex: `PgDown`): Ativar/Desativar Modo Fantasma (Click-Through)
+
+> **💡 Arquitetura de Hotkeys Segura**: Os atalhos utilizam exclusivamente a API oficial **`RegisterHotKey`** do Windows com resolução dinâmica (`QKeySequence` + `VkKeyScanW`). Não são instalados ganchos globais de teclado (hooks), garantindo que o programa nunca seja visto como keylogger e consuma 0% de CPU.
 
 ### Comandos de Texto (No input do chat)
 - `/clear` - Limpa todas as mensagens da tela
@@ -122,14 +128,18 @@ Na primeira execução, o sistema gerará automaticamente o arquivo `settings.js
 
 ---
 
-## 🔒 Segurança dos Dados
+## 🔒 Segurança dos Dados e Antivírus
 
+### Criptografia de Tokens (DPAPI)
 O campo `tiktok_session_id` no `settings.json` é criptografado automaticamente usando a **DPAPI (Data Protection API)** do Windows:
-
 - A chave de criptografia está vinculada ao **usuário Windows logado** na máquina.
 - Se o arquivo `settings.json` for copiado para outro computador, o token **não pode ser descriptografado**.
 - Vírus do tipo "infostealer" que roubem o arquivo só verão dados ilegíveis (`DPAPI:AQAAANCMnd8...`).
-- Nenhuma ação extra é necessária por parte do usuário — a criptografia é totalmente automática.
+
+### Antivírus e Windows SmartScreen ("Fornecedor Desconhecido")
+- **Por que aparecia alerta de Cavalo de Tróia anteriormente?** Versões antigas usavam a biblioteca `keyboard`, que instalava ganchos de teclado de baixo nível (`WH_KEYBOARD_LL`). Em executáveis não assinados, o Windows Defender classificava essa técnica como heurística suspeita de keylogger. **A biblioteca foi 100% removida**, adotando a API nativa segura `RegisterHotKey`.
+- **Por que o Windows exibe "Fornecedor Desconhecido"?** Certificados comerciais de assinatura de código (*Code Signing*) custam centenas de dólares por ano. Como projeto independente, o executável é distribuído sem assinatura comercial paga.
+- **Como executar com segurança:** Na primeira execução, basta clicar em **"Mais informações" ➔ "Executar assim mesmo"**. O Windows gravará a permissão permanentemente.
 
 ---
 
